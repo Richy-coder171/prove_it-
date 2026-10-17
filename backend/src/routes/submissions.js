@@ -33,10 +33,12 @@ router.post('/:id/override', requireOwnerOfSubmission, asyncHandler(async (req, 
   req.submission.score.total = totalOf(req.submission.score.criteria);
   const reasoning = req.submission.score.criteria.find((row) => /reason|analysis|problem.?solv/i.test(row.name));
   req.submission.score.reasoning = reasoning?.points || 0;
+  req.submission.markModified('score');
   if (req.submission.badge) {
     req.submission.badge.total = req.submission.score.total;
     req.submission.badge.criteria = req.submission.score.criteria.map(({ name, weight, points, why }) => ({ name, weight, points, why }));
     req.submission.badge.signature = signBadge(req.submission.badge);
+    req.submission.markModified('badge');
   }
   await req.submission.save();
   res.json(submissionView(req.submission));
@@ -103,6 +105,7 @@ router.post('/:id/mentor', requireOwnerOfSubmission, asyncHandler(async (req, re
   if (req.submission.badge) {
     req.submission.badge.mentor = { name: mentorName.trim(), note: note.trim() };
     req.submission.badge.signature = signBadge(req.submission.badge);
+    req.submission.markModified('badge');
   }
   await req.submission.save();
   res.json(submissionView(req.submission));
