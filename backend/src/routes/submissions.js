@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { Submission } from '../models.js';
-import { loadSubmission, requireOwnerOfSubmission } from '../middleware.js';
+import { requireCandidate, requireOwnerOfSubmission } from '../middleware.js';
 import { asyncHandler, signBadge } from '../util.js';
 import { generateFollowups, generateSkillGaps, gradeSubmission } from '../graders.js';
 import { submissionView } from './challenges.js';
@@ -44,12 +44,19 @@ router.post('/:id/override', requireOwnerOfSubmission, asyncHandler(async (req, 
   res.json(submissionView(req.submission));
 }));
 
-router.post('/:id/answer', loadSubmission, asyncHandler(async (req, res) => {
+router.post('/:id/answer', requireCandidate, asyncHandler(async (req, res) => {
+  if (req.submission.status === 'expired') return res.status(410).json({ error: 'This attempt has expired. Start a new attempt to try again.', expired: true });
   const answer = req.body?.answer;
   if (req.submission.status !== 'started') return res.status(409).json({ error: 'This attempt has already been submitted' });
   if (typeof answer !== 'string' || answer.trim().length < 20) return res.status(400).json({ error: 'Please provide an answer of at least 20 characters' });
+  if (!req.submission.deadline || Date.now() > new Date(req.submission.deadline).getTime()) {
+    req.submission.status = 'expired';
+    req.submission.late = true;
+    await req.submission.save();
+    return res.status(410).json({ error: 'This attempt expired before your answer was submitted. Start a new attempt to try again.', expired: true });
+  }
   req.submission.answer = answer.trim();
-  req.submission.late = Boolean(req.submission.deadline && Date.now() > req.submission.deadline.getTime());
+  req.submission.late = false;
   req.submission.questions = await generateFollowups(req.challenge, req.submission.answer);
   req.submission.qa = req.submission.questions.map((q) => ({ q, a: '' }));
   req.submission.status = 'answered';
@@ -57,11 +64,13 @@ router.post('/:id/answer', loadSubmission, asyncHandler(async (req, res) => {
   res.json(submissionView(req.submission));
 }));
 
-router.post('/:id/defend', loadSubmission, asyncHandler(async (req, res) => {
+router.post('/:id/defend', requireCandidate, asyncHandler(async (req, res) => {
   if (req.submission.status !== 'answered') return res.status(409).json({ error: 'Submit your solution before defending it' });
   const answers = req.body?.answers;
-  if (!Array.isArray(answers) || answers.length !== req.submission.questions.length || answers.some((answer) => typeof answer !== 'string')) {
-    return res.status(400).json({ error: 'Answers must match the follow-up questions' });
+  if (!Array.isArray(req.submission.questions) || ![2, 3].includes(req.submission.questions.length)
+    || !Array.isArray(answers) || answers.length !== req.submission.questions.length
+    || answers.some((answer) => typeof answer !== 'string' || answer.trim().length < 20 || new Set(answer.trim().toLowerCase().match(/[a-z0-9]+/g) || []).size < 4)) {
+    return res.status(400).json({ error: 'Answers must match the follow-up questions and each answer must contain at least 20 meaningful characters' });
   }
   req.submission.qa = req.submission.questions.map((q, index) => ({ q, a: answers[index].trim() }));
   req.submission.score = await gradeSubmission(req.challenge, req.submission.answer, req.submission.qa);
@@ -83,18 +92,26 @@ router.post('/:id/defend', loadSubmission, asyncHandler(async (req, res) => {
   res.json(submissionView(req.submission));
 }));
 
-router.get('/:id', loadSubmission, (req, res) => res.json(submissionView(req.submission)));
+router.get('/:id', requireCandidate, (req, res) => res.json(submissionView(req.submission)));
 
-router.post('/:id/rereview', loadSubmission, asyncHandler(async (req, res) => {
+router.post('/:id/rereview', requireCandidate, asyncHandler(async (req, res) => {
   if (req.submission.status !== 'graded') return res.status(409).json({ error: 'Only a graded result can be reviewed' });
   req.submission.rereviewRequested = true;
   await req.submission.save();
   res.json(submissionView(req.submission));
 }));
 
-router.post('/:id/skill-gap', loadSubmission, asyncHandler(async (req, res) => {
+router.post('/:id/skill-gap', requireCandidate, asyncHandler(async (req, res) => {
   if (req.submission.status !== 'graded' || !req.submission.score) return res.status(409).json({ error: 'The attempt must be graded first' });
   res.json(await generateSkillGaps(req.submission.score));
+}));
+
+router.post('/:id/badge-visibility', requireCandidate, asyncHandler(async (req, res) => {
+  if (!req.submission.badgeId || !req.submission.badge) return res.status(409).json({ error: 'This attempt has no verified badge' });
+  if (typeof req.body?.public !== 'boolean') return res.status(400).json({ error: 'public must be a boolean' });
+  req.submission.badgeBreakdownPublic = req.body.public;
+  await req.submission.save();
+  res.json({ public: req.submission.badgeBreakdownPublic });
 }));
 
 router.post('/:id/mentor', requireOwnerOfSubmission, asyncHandler(async (req, res) => {

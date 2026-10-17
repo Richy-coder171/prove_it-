@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import crypto from 'crypto';
 
 const { Schema } = mongoose;
 
@@ -16,7 +15,9 @@ const challengeSchema = new Schema(
     rubric: [{ _id: false, name: String, weight: Number, description: String }],
     seedQuestions: [String],
     status: { type: String, enum: ['draft', 'live'], default: 'draft' },
-    ownerKey: { type: String, default: () => crypto.randomBytes(12).toString('hex') },
+    ownerKeyHash: { type: String, select: false },
+    // Temporary compatibility for legacy records. Middleware migrates a valid key and unsets it.
+    ownerKey: { type: String, select: false },
   },
   { timestamps: true },
 );
@@ -32,13 +33,15 @@ const submissionSchema = new Schema(
     answer: { type: String, default: '' },
     questions: [String],
     qa: [{ _id: false, q: String, a: String }],
-    status: { type: String, enum: ['started', 'answered', 'graded'], default: 'started' },
+    status: { type: String, enum: ['started', 'answered', 'graded', 'expired'], default: 'started' },
+    candidateTokenHash: { type: String, select: false },
     score: Schema.Types.Mixed,
     shortlisted: { type: Boolean, default: false },
     rereviewRequested: { type: Boolean, default: false },
     mentor: { name: String, note: String, at: Date },
     badge: Schema.Types.Mixed,
     badgeId: { type: String, index: true, sparse: true },
+    badgeBreakdownPublic: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -70,7 +70,9 @@ export default function BadgePage() {
 
       <section className="card stack">
         <h2>Why this score</h2>
-        {(badge.criteria || []).map((criterion, index) => (
+        {!badge.breakdownPublic
+          ? <p className="muted">The detailed score breakdown is private. The verified score and badge details remain public.</p>
+          : (badge.criteria || []).map((criterion, index) => (
           <div className="stack" key={`${criterion.name}-${index}`}>
             <div className="row between"><strong>{criterion.name}</strong><strong>{criterion.points} / {criterion.weight}</strong></div>
             <div className="bar"><i style={{ width: `${criterion.weight ? (criterion.points / criterion.weight) * 100 : 0}%` }} /></div>

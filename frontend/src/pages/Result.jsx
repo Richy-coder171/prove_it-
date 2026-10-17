@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { saveSession } from '../lib/store.js';
+import { getCandidateToken, saveSession } from '../lib/store.js';
 import { useAsync } from '../lib/hooks.js';
 
 function CriterionCard({ criterion }) {
@@ -28,11 +28,12 @@ function CriterionCard({ criterion }) {
 export default function Result() {
   const { sid } = useParams();
   const navigate = useNavigate();
-  const { data: submission, loading, error: loadError } = useAsync(() => api.getSubmission(sid), [sid]);
+  const { data: submission, loading, error: loadError } = useAsync(() => api.getSubmission(sid, getCandidateToken(sid)), [sid]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [requestedFor, setRequestedFor] = useState('');
   const [gapResult, setGapResult] = useState(null);
+  const [breakdownPublic, setBreakdownPublic] = useState(null);
   const requested = submission?.rereviewRequested || requestedFor === sid;
   const gaps = gapResult?.sid === sid ? gapResult.gaps : null;
 
@@ -40,7 +41,7 @@ export default function Result() {
     setBusy('rereview');
     setError('');
     try {
-      await api.requestRereview(sid);
+      await api.requestRereview(sid, getCandidateToken(sid));
       setRequestedFor(sid);
     } catch (err) {
       setError(err.message || 'Could not request a human re-review.');
@@ -53,7 +54,7 @@ export default function Result() {
     setBusy('skill-gap');
     setError('');
     try {
-      const result = await api.skillGap(sid);
+      const result = await api.skillGap(sid, getCandidateToken(sid));
       setGapResult({ sid, gaps: result.gaps || [] });
     } catch (err) {
       setError(err.message || 'Could not create your learning plan.');
@@ -65,6 +66,20 @@ export default function Result() {
   function retryChallenge() {
     saveSession(submission.challengeId, null);
     navigate(`/c/${submission.challengeId}?retry=1`);
+  }
+
+  async function toggleBreakdown() {
+    const next = !(breakdownPublic ?? submission.badgeBreakdownPublic);
+    setBusy('visibility');
+    setError('');
+    try {
+      const result = await api.setBadgeVisibility(sid, next, getCandidateToken(sid));
+      setBreakdownPublic(result.public);
+    } catch (err) {
+      setError(err.message || 'Could not update badge visibility.');
+    } finally {
+      setBusy('');
+    }
   }
 
   if (loading) return <div className="card center"><span className="spinner" /></div>;
@@ -99,6 +114,14 @@ export default function Result() {
         {submission.badgeId && <Link className="btn primary" to={`/badge/${submission.badgeId}`}>View my verified badge</Link>}
         <button className="btn ghost" type="button" disabled={busy !== '' || requested} onClick={requestRereview}>{requested ? 'Re-review requested' : 'Request human re-review'}</button>
       </div>
+      {submission.badgeId && <div className="card stack">
+        <h3>Badge score breakdown</h3>
+        <p className="muted small">Detailed rubric evidence is private by default. You control whether it appears on your public badge.</p>
+        <div className="row between">
+          <span className={`pill ${(breakdownPublic ?? submission.badgeBreakdownPublic) ? 'good' : 'info'}`}>{(breakdownPublic ?? submission.badgeBreakdownPublic) ? 'Public' : 'Private'}</span>
+          <button className="btn ghost" type="button" disabled={busy !== ''} onClick={toggleBreakdown}>{(breakdownPublic ?? submission.badgeBreakdownPublic) ? 'Make breakdown private' : 'Publish score breakdown'}</button>
+        </div>
+      </div>}
       {(loadError || error) && <div className="error" role="alert">{error || loadError}</div>}
       {busy && <div className="row"><span className="spinner" /> <span className="muted small">{busy === 'skill-gap' ? 'Preparing your learning plan...' : 'Sending your request...'}</span></div>}
 

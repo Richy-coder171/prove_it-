@@ -19,7 +19,10 @@ router.get('/:badgeId', asyncHandler(async (req, res) => {
     authenticity: badge.authenticity ?? null,
     mentor: badge.mentor ?? null,
     challengeTitle: badge.challengeTitle,
-    criteria: (badge.criteria || []).map(({ name, weight, points, why }) => ({ name, weight, points, why })),
+    breakdownPublic: Boolean(submission.badgeBreakdownPublic),
+    criteria: submission.badgeBreakdownPublic
+      ? (badge.criteria || []).map(({ name, weight, points, why }) => ({ name, weight, points, why }))
+      : [],
   });
 }));
 

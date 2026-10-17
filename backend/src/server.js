@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import challenges from './routes/challenges.js';
 import submissions from './routes/submissions.js';
 import badges from './routes/badges.js';
+import { Challenge } from './models.js';
+import { hashSecret } from './util.js';
 
 const app = express();
 app.use(cors());
@@ -24,7 +26,16 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/proveit')
-  .then(() => app.listen(port, () => console.log(`ProveIt API on :${port}`)))
+  .then(async () => {
+    const legacy = await Challenge.find({ ownerKey: { $type: 'string' } }).select('+ownerKey +ownerKeyHash');
+    for (const challenge of legacy) {
+      if (!challenge.ownerKeyHash) challenge.ownerKeyHash = hashSecret(challenge.ownerKey);
+      challenge.ownerKey = undefined;
+      challenge.set('ownerKey', undefined);
+      await challenge.save();
+    }
+    app.listen(port, () => console.log(`ProveIt API on :${port}`));
+  })
   .catch((e) => {
     console.error('Mongo connection failed:', e.message);
     process.exit(1);

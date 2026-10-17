@@ -1,4 +1,4 @@
-import { clamp, extractJson, tokenOverlap } from './util.js';
+import { clamp, evidencePresent, extractJson, normalizeEvidenceWhitespace } from './util.js';
 
 const rubricFor = (skill, seed) => {
   const sets = [
@@ -160,50 +160,61 @@ export function generateFollowups(challenge, answer) {
   });
 }
 
-const answerExcerpt = (answer, offset = 0) => {
-  const text = String(answer || '').replace(/\s+/g, ' ').trim();
-  if (!text) return [];
-  const start = Math.min(offset, Math.max(0, text.length - 1));
-  return [text.slice(start, start + 100).trim() || text.slice(0, 100)];
+const answerSentences = (text) => String(text || '').split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+const has = (text, pattern) => pattern.test(String(text || '').toLowerCase());
+const evidenceFor = (criterion, answer) => {
+  const keys = `${criterion.name} ${criterion.description}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 4);
+  return answerSentences(answer).find((sentence) => keys.some((word) => sentence.toLowerCase().includes(word))) || '';
 };
 
-function answerEvidence(items, answer, index) {
-  const valid = (Array.isArray(items) ? items : []).map(String).filter((quote) => quote.trim() && tokenOverlap(quote, answer) >= 0.55).slice(0, 2);
-  return valid.length ? valid : answerExcerpt(answer, index * 13);
-}
-
 function mockGrade({ challenge, candidateAnswer, defendTranscript, runIndex = 0 }) {
-  const answerWords = candidateAnswer.trim().split(/\s+/).filter(Boolean);
-  const defenseWords = defendTranscript.trim().split(/\s+/).filter(Boolean);
-  const answerSet = new Set(answerWords.map((word) => word.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean));
-  const overlap = defenseWords.length ? defenseWords.filter((word) => answerSet.has(word.toLowerCase().replace(/[^a-z0-9]/g, ''))).length / defenseWords.length : 0;
-  const confidenceKey = overlap >= 0.25 ? 'high' : overlap >= 0.1 ? 'medium' : 'low';
+  const answer = candidateAnswer.toLowerCase();
+  const defense = defendTranscript.toLowerCase();
+  const challengeTerms = `${challenge.skill} ${challenge.task}`.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
+  const taskFit = challengeTerms.some((term) => answer.includes(term));
+  const action = has(answer, /\b(would|will|first|build|create|test|compare|measure|check|analy[sz]e|interview|launch|track|validate|calculate|clean|query|design|review|pilot)\b/);
+  const metrics = has(answer, /\b(metric|measure|track|rate|percent|%,|revenue|cost|margin|conversion|retention|repeat|accuracy|time|baseline|target|result|orders|users|sales)\b|\b\d+(?:\.\d+)?%?/);
+  const assumptions = has(answer, /\b(assum|hypothes|expect|if |suppose|unknown|validate|test first)\b/);
+  const tradeoffs = has(answer, /\b(trade.?off|because|instead|however|risk|limitation|constraint|alternative|cost|benefit|reliable|fallback)\b/);
+  const evidence = has(answer, /\b(example|data|record|sample|source|customer|student|cook|founder|query|dashboard|result|order|payment|survey|interview)\b/);
+  const alignmentTerms = defense.split(/[^a-z0-9]+/).filter((word) => word.length > 4);
+  const uniqueDefenseTerms = new Set(alignmentTerms);
+  const aligned = [...uniqueDefenseTerms].filter((word) => answer.includes(word)).length;
+  const consistency = uniqueDefenseTerms.size ? aligned / uniqueDefenseTerms.size : 0;
+  const authenticity = consistency >= 0.2 ? 'high' : consistency >= 0.08 ? 'medium' : 'low';
   const seed = hashText(candidateAnswer + defendTranscript);
-  const completeness = clamp(48 + Math.min(answerWords.length, 80) * 0.45, 45, 88);
   const criteria = challenge.rubric.map((item, index) => {
-    const percent = clamp(completeness + ((seed + index * 7 + runIndex * 3) % 13) - 6, 35, 96);
+    const label = `${item.name} ${item.description}`.toLowerCase();
+    let points = 42;
+    if (taskFit) points += 12;
+    if (action) points += 10;
+    if (evidence) points += 8;
+    if (metrics) points += /measure|metric|result|execution/i.test(label) ? 17 : 7;
+    if (assumptions) points += /assum|understand|risk|reason/i.test(label) ? 15 : 5;
+    if (tradeoffs) points += /reason|trade.?off|risk|analysis/i.test(label) ? 15 : 5;
+    if (/reason|analysis|problem.?solv/i.test(label)) points += Math.round(consistency * 15) - 4;
+    if (/communication|clear/i.test(label)) points += has(answer, /\b(first|then|finally|therefore|because)\b/) ? 10 : -3;
+    const variation = ((seed + index * 7 + runIndex * 5) % 5) - 2;
+    const percent = clamp(points + variation, 20, 94);
+    const quote = evidenceFor(item, candidateAnswer);
     return {
       name: item.name,
       max: item.weight,
-      score: Math.round(item.weight * percent / 100 * 10) / 10,
-      evidence: answerExcerpt(candidateAnswer, index * 17),
-      why: answerWords.length < 35
-        ? `The response addresses ${item.name.toLowerCase()} but gives limited detail to support a stronger score.`
-        : `The response provides a concrete explanation relevant to ${item.name.toLowerCase()}, with room to make the result more measurable.`,
+      score: Math.round(item.weight * percent / 100 * 100) / 100,
+      evidence: quote ? [normalizeEvidenceWhitespace(quote)] : [],
+      why: quote
+        ? `The response includes a concrete statement related to ${item.name.toLowerCase()}, but could make its support more measurable.`
+        : `The response did not provide a specific statement that supports ${item.name.toLowerCase()}.`,
     };
   });
   return {
     total: criteria.reduce((sum, item) => sum + item.score, 0),
     criteria,
     authenticity_signal: {
-      level: confidenceKey,
-      reasons: confidenceKey === 'high'
-        ? ['The spoken follow-up reused details from the written solution.']
-        : confidenceKey === 'medium'
-          ? ['Some details in the spoken follow-up aligned with the written solution.']
-          : ['The spoken follow-up contained few details that overlapped with the written solution.'],
+      level: authenticity,
+      reasons: [authenticity === 'high' ? 'The spoken answers reused several details from the written solution.' : authenticity === 'medium' ? 'Some spoken details aligned with the written solution.' : 'The spoken answers shared few specific details with the written solution.'],
     },
-    grader_confidence: 0.72 + (seed % 20) / 100,
+    grader_confidence: 0.68 + (seed % 20) / 100,
   };
 }
 
@@ -216,12 +227,16 @@ function validateGrade(raw, challenge, answer) {
     if (!Number.isFinite(points) && Number.isFinite(Number(result.percent))) points = max * Number(result.percent) / 100;
     points = clamp(Number.isFinite(points) ? points : 0, 0, max);
     const percent = max ? points / max * 100 : 0;
+    const criterionTerms = `${rubric.name} ${rubric.description}`.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
+    const evidence = (Array.isArray(result.evidence) ? result.evidence : []).map(String)
+      .filter((quote) => evidencePresent(quote, answer) && criterionTerms.some((word) => normalizeEvidenceWhitespace(quote).toLowerCase().includes(word)))
+      .slice(0, 2).map(normalizeEvidenceWhitespace);
     return {
       name: rubric.name, weight: max,
       points: Math.round(points * 100) / 100,
       percent: Math.round(percent * 100) / 100,
-      evidence: answerEvidence(result.evidence, answer, index),
-      why: String(result.why || 'This criterion was scored from the evidence present in the submitted answer.'),
+      evidence,
+      why: evidence.length ? `The response includes an exact statement relevant to ${rubric.name.toLowerCase()}; consider adding a measurable check to make the support clearer.` : `The response did not provide an exact, verifiable statement supporting ${rubric.name.toLowerCase()}.`,
       overridden: false,
       aiPoints: Math.round(points * 100) / 100,
     };
@@ -230,7 +245,7 @@ function validateGrade(raw, challenge, answer) {
   const rawLevel = String(signal.level || signal.key || 'medium').toLowerCase();
   const key = rawLevel.includes('high') ? 'high' : rawLevel.includes('low') ? 'low' : 'medium';
   return {
-    total: clamp(Number(raw.total) || criteria.reduce((sum, item) => sum + item.points, 0), 0, 100),
+    total: Math.round(criteria.reduce((sum, item) => sum + item.points, 0)),
     criteria,
     authenticity: {
       key,
@@ -260,7 +275,8 @@ export async function gradeSubmission(challenge, candidateAnswer, qa) {
     const first = grades[0].criteria.find((item) => item.name === rubric.name);
     return { ...first, points: Math.round(points * 100) / 100, aiPoints: Math.round(points * 100) / 100, percent: rubric.weight ? Math.round(points / rubric.weight * 10000) / 100 : 0 };
   });
-  const totals = grades.map((grade) => grade.total);
+  // Per-run totals are the sum of the same validated, clamped criterion points shown to candidates.
+  const totals = grades.map((grade) => grade.criteria.reduce((sum, item) => sum + item.points, 0));
   const averageTotal = totals.reduce((sum, total) => sum + total, 0) / totals.length;
   const variance = totals.reduce((sum, total) => sum + (total - averageTotal) ** 2, 0) / totals.length;
   const reasoningCriterion = criteria.find((item) => /reason|analysis|problem.?solv/i.test(item.name));
@@ -271,7 +287,8 @@ export async function gradeSubmission(challenge, candidateAnswer, qa) {
     total: Math.round(criteria.reduce((sum, item) => sum + item.points, 0)),
     reasoning: reasoningCriterion?.points || 0,
     reasoningMax: reasoningCriterion?.weight || 0,
-    flagged: variance >= 36,
+    // Population variance >= 25 points² is the documented human-review threshold.
+    flagged: variance >= 25,
     variance: Math.round(variance * 100) / 100,
     graderConfidence: Math.round(grades.reduce((sum, grade) => sum + grade.graderConfidence, 0) / grades.length * 100) / 100,
     authenticity: {

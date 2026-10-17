@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSpeech } from '../lib/hooks.js';
+import { getCandidateToken } from '../lib/store.js';
 
 const gradingMessages = [
   'Reading your answer...',
@@ -8,6 +9,10 @@ const gradingMessages = [
   'Running consistency checks...',
   'Writing your breakdown...',
 ];
+const meaningful = (answer) => {
+  const text = String(answer || '').trim();
+  return text.length >= 20 && new Set(text.toLowerCase().match(/[a-z0-9]+/g) || []).size >= 4;
+};
 
 export default function Defend({ submission, onDone }) {
   const questions = submission.questions || [];
@@ -17,6 +22,7 @@ export default function Defend({ submission, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [messageIndex, setMessageIndex] = useState(0);
+  const [answerError, setAnswerError] = useState('');
   const speech = useSpeech();
 
   useEffect(() => {
@@ -31,7 +37,7 @@ export default function Defend({ submission, onDone }) {
     setSubmitError('');
     setSubmitting(true);
     try {
-      await api.defend(submission.id, allAnswers);
+      await api.defend(submission.id, allAnswers, getCandidateToken(submission.id));
       onDone();
     } catch (error) {
       setSubmitError(error.message || 'Could not submit your answers. Please try again.');
@@ -42,8 +48,14 @@ export default function Defend({ submission, onDone }) {
 
   function next() {
     speech.stop();
+    const normalized = speech.text.trim();
+    if (!meaningful(normalized)) {
+      setAnswerError('Please give this question a specific answer of at least 20 characters.');
+      return;
+    }
+    setAnswerError('');
     const nextAnswers = [...answers];
-    nextAnswers[index] = speech.text;
+    nextAnswers[index] = normalized;
     setAnswers(nextAnswers);
     speech.setText('');
     if (index === questions.length - 1) sendAnswers(nextAnswers);
@@ -66,6 +78,10 @@ export default function Defend({ submission, onDone }) {
   );
 
   const lastQuestion = index === questions.length - 1;
+  const pendingQuestions = questions.map((_, questionIndex) => questionIndex).filter((questionIndex) => {
+    const value = questionIndex === index ? speech.text : answers[questionIndex];
+    return !meaningful(value);
+  });
   return (
     <div className="stack">
       <div>
@@ -75,6 +91,7 @@ export default function Defend({ submission, onDone }) {
       <div className="stack">
         <div className="row between"><span>Question {index + 1} of {questions.length}</span><span className="muted small">{Math.round((index / questions.length) * 100)}%</span></div>
         <div className="bar"><i style={{ width: `${(index / questions.length) * 100}%` }} /></div>
+        <p className="muted small">{pendingQuestions.length ? `Still needs an answer: ${pendingQuestions.map((questionIndex) => `Question ${questionIndex + 1}`).join(', ')}` : 'Every question has an answer.'}</p>
         <div className="card"><h3>{questions[index]}</h3></div>
       </div>
       <div className="card stack">
@@ -88,6 +105,8 @@ export default function Defend({ submission, onDone }) {
         )}
         <label htmlFor="defend-answer">Your answer (you can edit what was heard)</label>
         <textarea id="defend-answer" value={speech.text} onChange={(event) => speech.setText(event.target.value)} />
+        {answerError && <div className="error" role="alert">{answerError}</div>}
+        <p className="muted small">Each question needs a specific answer before you can continue.</p>
         {speech.error && <p className="muted small">{speech.error}</p>}
         <div className="row">
           <button className="btn primary" type="button" onClick={next}>{lastQuestion ? 'Submit my answers' : 'Next question'}</button>

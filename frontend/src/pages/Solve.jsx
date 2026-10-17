@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { getSession, saveSession } from '../lib/store.js';
+import { getCandidateToken, getSession, saveSession } from '../lib/store.js';
 import { useCountdown } from '../lib/hooks.js';
 import Defend from '../components/Defend.jsx';
 
 export default function Solve() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const retry = new URLSearchParams(window.location.search).get('retry') === '1';
+  const [retry, setRetry] = useState(() => new URLSearchParams(window.location.search).get('retry') === '1');
   const [step, setStep] = useState('loading');
   const [challenge, setChallenge] = useState(null);
   const [submission, setSubmission] = useState(null);
@@ -16,6 +16,8 @@ export default function Solve() {
   const [email, setEmail] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
+  const [resumeUnavailable, setResumeUnavailable] = useState(false);
+  const [duplicateAttempt, setDuplicateAttempt] = useState(false);
   const [sending, setSending] = useState(false);
   const { label, ms, expired } = useCountdown(submission?.deadline);
 
@@ -24,6 +26,8 @@ export default function Solve() {
     async function load() {
       setStep('loading');
       setError('');
+      setDuplicateAttempt(false);
+      setResumeUnavailable(false);
       setChallenge(null);
       setSubmission(null);
       try {
@@ -38,16 +42,19 @@ export default function Solve() {
         setName(session.name || '');
         setEmail(session.email || '');
         try {
-          const savedSubmission = await api.getSubmission(session.sid);
+          const token = session.candidateToken || getCandidateToken(session.sid);
+          const savedSubmission = await api.getSubmission(session.sid, token);
           if (!active) return;
           setSubmission(savedSubmission);
           if (savedSubmission.status === 'started') setStep('answer');
           else if (savedSubmission.status === 'answered') setStep('defend');
           else if (savedSubmission.status === 'graded') navigate(`/result/${session.sid}`, { replace: true });
+          else if (savedSubmission.status === 'expired') setStep('expired');
           else setStep('intro');
         } catch (resumeError) {
           if (!active) return;
-          setError(resumeError.message || 'Could not resume your submission.');
+          setError('');
+          setResumeUnavailable(true);
           setStep('intro');
         }
       } catch (loadError) {
@@ -65,14 +72,16 @@ export default function Solve() {
     setSending(true);
     setError('');
     try {
-      const started = await api.start(id, { name, email, retry });
-      saveSession(id, { sid: started.id, name, email });
+      const started = await api.start(id, { name, email, retry: retry || resumeUnavailable });
+      saveSession(id, { sid: started.id, name, email, candidateToken: started.candidateToken });
       setSubmission(started);
+      setDuplicateAttempt(false);
       setAnswer('');
       setStep('answer');
-      if (retry) navigate(`/c/${id}`, { replace: true });
+      if (retry || resumeUnavailable) { setResumeUnavailable(false); navigate(`/c/${id}`, { replace: true }); }
     } catch (startError) {
       setError(startError.message || 'Could not start this challenge.');
+      setDuplicateAttempt(startError.status === 409);
     } finally {
       setSending(false);
     }
@@ -83,11 +92,12 @@ export default function Solve() {
     setSending(true);
     setError('');
     try {
-      const answered = await api.submitAnswer(submission.id, answer);
+      const answered = await api.submitAnswer(submission.id, answer, getCandidateToken(submission.id));
       setSubmission(answered);
       setStep('defend');
     } catch (submitError) {
       setError(submitError.message || 'Could not submit your answer.');
+      if (submitError.expired) setStep('expired');
     } finally {
       setSending(false);
     }
@@ -96,6 +106,13 @@ export default function Solve() {
   if (step === 'loading') return <div className="card center"><span className="spinner" /></div>;
   if (step === 'error') return <div className="card"><div className="error" role="alert"><p>{error}</p><p>This challenge is not available.</p></div></div>;
   if (step === 'defend') return <Defend submission={submission} onDone={() => navigate(`/result/${submission.id}`)} />;
+  if (step === 'expired' || (step === 'answer' && expired)) return (
+    <div className="card stack">
+      <div className="notice">Your timed attempt has expired. Answers submitted after the server deadline cannot be accepted.</div>
+      <p className="muted">You can start a new attempt. Your previous attempt will remain separate.</p>
+      <div><button className="btn primary" type="button" disabled={sending} onClick={() => { saveSession(id, null); setRetry(true); setStep('intro'); setError(''); }}>Start a new attempt</button></div>
+    </div>
+  );
 
   if (step === 'intro') return (
     <div className="stack">
@@ -110,16 +127,18 @@ export default function Solve() {
       <div className="card" style={{ whiteSpace: 'pre-wrap' }}>{challenge.task}</div>
       <div className="card stack">
         <h2>How you are scored</h2>
-        {(challenge.rubric || []).map((item, index) => <div key={`${item.name}-${index}`}><strong>{item.name} ({item.weight}%)</strong><div className="muted">{item.description}</div></div>)}
+        {(challenge.rubric || []).map((item, index) => <div key={`${item.name}-${index}`}><strong>{item.name}</strong><div className="muted">{item.description}</div></div>)}
       </div>
       <div className="notice">You will answer a timed task, then defend your answer out loud. Longer answers do not earn more points.</div>
       <form className="card stack" onSubmit={start}>
         <h2>Start this challenge</h2>
         <div><label htmlFor="candidate-name">Your name</label><input id="candidate-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>
         <div><label htmlFor="candidate-email">Email</label><input id="candidate-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
+        {resumeUnavailable && <div className="notice">This browser can no longer resume the saved session. Starting again will create a separate attempt; earlier answers stay private.</div>}
         {error && <div className="error" role="alert">{error}</div>}
+        {duplicateAttempt && <button className="btn ghost" type="button" disabled={sending} onClick={() => { setRetry(true); setDuplicateAttempt(false); setError(''); }}>Start a separate retry</button>}
         <div className="row">
-          <button className="btn primary" type="submit" disabled={sending}>{sending ? <><span className="spinner" /> Starting...</> : 'Start the timer'}</button>
+          <button className="btn primary" type="submit" disabled={sending}>{sending ? <><span className="spinner" /> Starting...</> : resumeUnavailable ? 'Start a new attempt' : 'Start the timer'}</button>
         </div>
       </form>
     </div>
@@ -139,7 +158,6 @@ export default function Solve() {
         <label htmlFor="candidate-answer">Your answer</label>
         <textarea id="candidate-answer" className="code" value={answer} onChange={(event) => setAnswer(event.target.value)} minLength={20} required />
         <p className="muted small">Longer answers do not earn more points.</p>
-        {expired && <div className="notice">Time is up. You can still submit, but it will be marked late.</div>}
         {error && <div className="error" role="alert">{error}</div>}
         <div className="row">
           <button className="btn primary" type="submit" disabled={sending || answer.trim().length < 20}>{sending ? <><span className="spinner" /> AI is reading your answer and preparing your questions (5-15 seconds)...</> : 'Submit and continue to defend'}</button>

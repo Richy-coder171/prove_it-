@@ -1,9 +1,18 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 
 export const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
 export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+export const hashSecret = (value) => createHash('sha256').update(String(value)).digest('hex');
+
+export function safeEqualHex(left, right) {
+  if (!/^[a-f0-9]{64}$/i.test(String(left || '')) || !/^[a-f0-9]{64}$/i.test(String(right || ''))) return false;
+  const a = Buffer.from(left, 'hex');
+  const b = Buffer.from(right, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export function median(arr) {
   const a = [...arr].sort((x, y) => x - y);
@@ -30,15 +39,11 @@ export function extractJson(text) {
   }
 }
 
-const words = (t) =>
-  String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+export const normalizeEvidenceWhitespace = (text) => String(text || '').replace(/\s+/g, ' ').trim();
 
-// Share of the needle's words that appear in the haystack (0..1). Used to verify evidence quotes.
-export function tokenOverlap(needle, haystack) {
-  const n = words(needle);
-  if (!n.length) return 0;
-  const h = new Set(words(haystack));
-  return n.filter((w) => h.has(w)).length / n.length;
+export function evidencePresent(quote, source) {
+  const normalizedQuote = normalizeEvidenceWhitespace(quote);
+  return Boolean(normalizedQuote) && normalizeEvidenceWhitespace(source).includes(normalizedQuote);
 }
 const badgePayload = (badge) => JSON.stringify({
   badgeId: badge.badgeId,
@@ -60,8 +65,7 @@ export function signBadge(badge) {
 }
 
 export function verifyBadge(badge) {
-  if (!badge?.signature || !process.env.BADGE_SECRET) return false;
-  const expected = Buffer.from(signBadge(badge), 'hex');
-  const actual = Buffer.from(String(badge.signature), 'hex');
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  if (!badge?.signature || !/^[a-f0-9]{64}$/i.test(String(badge.signature)) || !process.env.BADGE_SECRET) return false;
+  try { return safeEqualHex(signBadge(badge), badge.signature); }
+  catch { return false; }
 }

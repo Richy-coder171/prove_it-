@@ -3,6 +3,8 @@ import { Challenge, Submission } from '../models.js';
 import { requireOwner } from '../middleware.js';
 import { asyncHandler } from '../util.js';
 import { generateChallenge } from '../graders.js';
+import crypto from 'crypto';
+import { hashSecret } from '../util.js';
 
 const router = Router();
 const challengeView = (challenge) => {
@@ -10,6 +12,8 @@ const challengeView = (challenge) => {
   value.id = String(value._id);
   delete value._id;
   delete value.__v;
+  delete value.ownerKey;
+  delete value.ownerKeyHash;
   return value;
 };
 const weightsTotal = (rubric) => rubric.reduce((sum, criterion) => sum + Number(criterion.weight), 0);
@@ -41,8 +45,9 @@ router.post('/generate', asyncHandler(async (req, res) => {
   } catch (error) {
     return res.status(502).json({ error: error.message || 'Could not generate a challenge' });
   }
-  const challenge = await Challenge.create({ mode, posterName: posterName.trim(), sourceText: text.trim(), ...draft, status: 'draft' });
-  res.status(201).json({ challenge: challengeView(challenge), ownerKey: challenge.ownerKey });
+  const ownerKey = crypto.randomBytes(32).toString('hex');
+  const challenge = await Challenge.create({ mode, posterName: posterName.trim(), sourceText: text.trim(), ...draft, status: 'draft', ownerKeyHash: hashSecret(ownerKey) });
+  res.status(201).json({ challenge: challengeView(challenge), ownerKey });
 }));
 
 router.get('/:id/owner', requireOwner, (req, res) => res.json(challengeView(req.challenge)));
@@ -103,7 +108,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     id: String(challenge._id), mode: challenge.mode, title: challenge.title,
     skill: challenge.skill, level: challenge.level, timeLimitMin: challenge.timeLimitMin,
     task: challenge.task,
-    rubric: challenge.rubric.map(({ name, weight, description }) => ({ name, weight, description })),
+    rubric: challenge.rubric.map(({ name, description }) => ({ name, description })),
     status: challenge.status,
   });
 }));
@@ -117,15 +122,16 @@ router.post('/:id/start', asyncHandler(async (req, res) => {
   if (typeof retry !== 'boolean') return res.status(400).json({ error: 'Retry must be a boolean' });
   const normalizedEmail = email.trim().toLowerCase();
   if (!retry) {
-    const existing = await Submission.findOne({ challengeId: challenge._id, email: normalizedEmail }).sort({ createdAt: -1 });
-    if (existing) return res.json(submissionView(existing));
+    const existing = await Submission.exists({ challengeId: challenge._id, email: normalizedEmail });
+    if (existing) return res.status(409).json({ error: 'Unable to start this attempt. Resume a saved session or choose a separate retry.' });
   }
   const startedAt = new Date();
+  const candidateToken = crypto.randomBytes(32).toString('hex');
   const submission = await Submission.create({
     challengeId: challenge._id, name: name.trim(), email: normalizedEmail,
-    startedAt, deadline: new Date(startedAt.getTime() + challenge.timeLimitMin * 60_000), status: 'started',
+    startedAt, deadline: new Date(startedAt.getTime() + challenge.timeLimitMin * 60_000), status: 'started', candidateTokenHash: hashSecret(candidateToken),
   });
-  res.status(201).json(submissionView(submission));
+  res.status(201).json({ ...submissionView(submission), candidateToken });
 }));
 
 export function submissionView(submission) {
@@ -134,6 +140,9 @@ export function submissionView(submission) {
   value.challengeId = String(value.challengeId?._id || value.challengeId);
   delete value._id;
   delete value.__v;
+  delete value.candidateTokenHash;
+  delete value.ownerKey;
+  delete value.ownerKeyHash;
   return value;
 }
 
