@@ -14,6 +14,22 @@ const challengeView = (challenge) => {
 };
 const weightsTotal = (rubric) => rubric.reduce((sum, criterion) => sum + Number(criterion.weight), 0);
 
+router.get('/', asyncHandler(async (req, res) => {
+  const challenges = await Challenge.find({ status: 'live' })
+    .sort({ createdAt: -1 })
+    .select('title mode skill level timeLimitMin createdAt')
+    .lean();
+  res.json(challenges.map((challenge) => ({
+    id: String(challenge._id),
+    title: challenge.title,
+    mode: challenge.mode,
+    skill: challenge.skill,
+    level: challenge.level,
+    timeLimitMin: challenge.timeLimitMin,
+    createdAt: challenge.createdAt,
+  })));
+}));
+
 router.post('/generate', asyncHandler(async (req, res) => {
   const { mode, text, posterName = '' } = req.body || {};
   if (!['job', 'idea'].includes(mode)) return res.status(400).json({ error: 'Mode must be job or idea' });

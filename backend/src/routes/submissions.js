@@ -95,8 +95,7 @@ router.post('/:id/skill-gap', loadSubmission, asyncHandler(async (req, res) => {
   res.json(await generateSkillGaps(req.submission.score));
 }));
 
-// The current frontend does not send the owner key to this endpoint.
-router.post('/:id/mentor', loadSubmission, asyncHandler(async (req, res) => {
+router.post('/:id/mentor', requireOwnerOfSubmission, asyncHandler(async (req, res) => {
   const { mentorName, note } = req.body || {};
   if (req.submission.status !== 'graded') return res.status(409).json({ error: 'Only graded submissions can receive an endorsement' });
   if (typeof mentorName !== 'string' || !mentorName.trim() || typeof note !== 'string' || !note.trim()) return res.status(400).json({ error: 'Mentor name and note are required' });

@@ -30,7 +30,7 @@ export default function CandidatePanel({ sid, ownerKey, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      await api.mentorEndorse(sid, { mentorName, note: mentorNote });
+      await api.mentorEndorse(sid, { mentorName, note: mentorNote }, ownerKey);
       reload();
       onChanged();
     } catch (err) {

@@ -25,6 +25,7 @@ export const api = {
   getSubmission: (sid) => request('GET', `/submissions/${sid}`),
   requestRereview: (sid) => request('POST', `/submissions/${sid}/rereview`),
   skillGap: (sid) => request('POST', `/submissions/${sid}/skill-gap`),
-  mentorEndorse: (sid, body) => request('POST', `/submissions/${sid}/mentor`, body),
+  mentorEndorse: (sid, body, key) => request('POST', `/submissions/${sid}/mentor`, body, key),
+  listLive: () => request('GET', '/challenges?status=live'),
   getBadge: (badgeId) => request('GET', `/badges/${badgeId}`),
 };
