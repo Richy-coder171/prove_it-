@@ -85,7 +85,7 @@ router.post('/:id/approve', requireOwner, asyncHandler(async (req, res) => {
 }));
 
 router.get('/:id/leaderboard', requireOwner, asyncHandler(async (req, res) => {
-  const submissions = await Submission.find({ challengeId: req.challenge._id }).sort({ createdAt: 1 }).lean();
+  const submissions = await Submission.find({ challengeId: req.challenge._id, status: 'graded' }).sort({ createdAt: 1 }).lean();
   submissions.sort((a, b) => (b.score?.total || 0) - (a.score?.total || 0));
   res.json(submissions.map((row) => ({
     id: String(row._id), name: row.name, email: row.email,
