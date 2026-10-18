@@ -14,6 +14,7 @@ import CandidateDashboard from './pages/CandidateDashboard.jsx';
 import StartupDashboard from './pages/StartupDashboard.jsx';
 import { useAuth } from './lib/auth.jsx';
 import { getAccountRole, roleHome } from './lib/roles.js';
+import { BadgeIcon } from './components/DomainVisuals.jsx';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 function ProtectedRoute({ roles, children }) {
@@ -49,7 +50,7 @@ export default function App() {
   return (
     <>
       <header className="nav" style={{ flexWrap: 'wrap' }}>
-        <Link to="/" className="logo" aria-label="ProveIt home">Prove<span>It</span></Link>
+        <Link to="/" className="logo" aria-label="ProveIt home"><span className="logo-mark"><BadgeIcon size={16} /></span>Prove<span>It</span></Link>
         {user && <nav aria-label="Main navigation">
           {getAccountRole(user) === 'startup' ? <>
             <NavLink to="/startup/dashboard">Dashboard</NavLink>

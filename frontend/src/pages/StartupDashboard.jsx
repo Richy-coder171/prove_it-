@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
+import { StartupTalentVisual } from '../components/DomainVisuals.jsx';
 
 function statusLabel(status) {
   return status === 'live' ? 'Published' : 'Draft';
@@ -19,11 +20,12 @@ export default function StartupDashboard() {
   return (
     <div className="stack">
       <section className="card startup-hero">
-        <div>
+        <div className="startup-hero__copy">
           <span className="pill warn">Startup workspace</span>
           <h1 style={{ marginTop: 12 }}>Welcome, {user?.name || 'startup'}.</h1>
           <p className="muted">Turn real work into a fair signal. Create a challenge, publish it, and review the candidates who complete it.</p>
         </div>
+        <StartupTalentVisual />
         <Link className="btn primary" to="/post">Post a challenge</Link>
       </section>
 

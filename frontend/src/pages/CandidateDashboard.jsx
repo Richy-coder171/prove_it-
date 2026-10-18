@@ -4,6 +4,7 @@ import Feed from './Feed.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
+import { CandidateProofVisual } from '../components/DomainVisuals.jsx';
 
 export default function CandidateDashboard() {
   const { user } = useAuth();
@@ -16,8 +17,8 @@ export default function CandidateDashboard() {
   const stats = data?.stats || {};
   return (
     <div className="stack">
-      <section className="card stack">
-        <div>
+      <section className="card candidate-hero">
+        <div className="candidate-hero__copy">
           <span className="pill info">Candidate workspace</span>
           <h1 style={{ marginTop: 12 }}>Welcome, {user?.name || 'candidate'}.</h1>
           <p className="muted">Find practical opportunities, complete the work, and build proof you can share.</p>
@@ -31,6 +32,7 @@ export default function CandidateDashboard() {
           <Link className="btn ghost" to="/profile">View profile and results</Link>
           <Link className="btn ghost" to="/leaderboard">See verified leaderboard</Link>
         </div>
+        <CandidateProofVisual />
       </section>
       <Feed />
     </div>

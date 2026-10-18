@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Login from './Login.jsx';
+import { ProofJourney } from '../components/DomainVisuals.jsx';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -161,6 +162,7 @@ export default function Home() {
           <span className="home__eyebrow">Start with the right workspace</span>
           <h2>Proof that travels with you.</h2>
           <p>Choose a candidate workspace to discover opportunities, or a startup workspace to turn real work into a fair hiring signal.</p>
+          <ProofJourney />
         </div>
         <div className="home__access-card"><Login /></div>
       </section>
