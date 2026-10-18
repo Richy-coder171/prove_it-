@@ -22,7 +22,7 @@ export default function Feed() {
         <p className="muted">Explore real tasks from teams hiring and building new ideas.</p>
       </div>
       <div className="grid two">
-        {challenges.map((challenge) => {
+        {challenges.map((challenge, index) => {
           const founderMode = challenge.mode === 'idea';
           return (
             <motion.article
