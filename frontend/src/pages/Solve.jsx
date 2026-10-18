@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { getCandidateToken, getSession, saveSession } from '../lib/store.js';
 import { useCountdown } from '../lib/hooks.js';
+import { useAuth } from '../lib/auth.jsx';
 import Defend from '../components/Defend.jsx';
 
 export default function Solve() {
@@ -11,6 +12,7 @@ export default function Solve() {
   }, []);
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [retry, setRetry] = useState(() => new URLSearchParams(window.location.search).get('retry') === '1');
   const [step, setStep] = useState('loading');
   const [challenge, setChallenge] = useState(null);
@@ -75,8 +77,11 @@ export default function Solve() {
     setSending(true);
     setError('');
     try {
-      const started = await api.start(id, { name, email, retry: retry || resumeUnavailable });
-      saveSession(id, { sid: started.id, name, email, candidateToken: started.candidateToken });
+      const startBody = user ? { retry: retry || resumeUnavailable } : { name, email, retry: retry || resumeUnavailable };
+      const started = await api.start(id, startBody);
+      const candidateName = user?.name || name;
+      const candidateEmail = user?.email || email;
+      saveSession(id, { sid: started.id, name: candidateName, email: candidateEmail, candidateToken: started.candidateToken });
       setSubmission(started);
       setDuplicateAttempt(false);
       setAnswer('');
@@ -135,11 +140,14 @@ export default function Solve() {
       <div className="notice">You will answer a timed task, then defend your answer out loud. Longer answers do not earn more points.</div>
       <form className="card stack" onSubmit={start}>
         <h2>Start this challenge</h2>
-        <div><label htmlFor="candidate-name">Your name</label><input id="candidate-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>
-        <div><label htmlFor="candidate-email">Email</label><input id="candidate-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
+        {user ? <div className="card soft small">Signed in as {user.name} ({user.email})</div> : <>
+          <div><label htmlFor="candidate-name">Your name</label><input id="candidate-name" value={name} onChange={(event) => setName(event.target.value)} required /></div>
+          <div><label htmlFor="candidate-email">Email</label><input id="candidate-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
+        </>}
         {resumeUnavailable && <div className="notice">This browser can no longer resume the saved session. Starting again will create a separate attempt; earlier answers stay private.</div>}
         {error && <div className="error" role="alert">{error}</div>}
         {duplicateAttempt && <button className="btn ghost" type="button" disabled={sending} onClick={() => { setRetry(true); setDuplicateAttempt(false); setError(''); }}>Start a separate retry</button>}
+        {!user && <div className="notice">Log in to keep all your badges on one profile and appear on the leaderboard. <Link to={`/login?next=/c/${id}`}>Log in</Link></div>}
         <div className="row">
           <button className="btn primary" type="submit" disabled={sending}>{sending ? <><span className="spinner" /> Starting...</> : resumeUnavailable ? 'Start a new attempt' : 'Start the timer'}</button>
         </div>
