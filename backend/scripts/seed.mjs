@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { Challenge, Submission } from '../src/models.js';
+import { Challenge, Submission, User } from '../src/models.js';
 import { generateChallenge, gradeSubmission } from '../src/graders.js';
-import { hashSecret, signBadge } from '../src/util.js';
+import { hashPassword, hashSecret, signBadge } from '../src/util.js';
 
 if (process.env.AI_MOCK !== '1') {
   console.error('Run with AI_MOCK=1 so seeding does not use your AI quota');
@@ -13,6 +13,13 @@ if (process.env.AI_MOCK !== '1') {
 const text = 'Junior Data Analyst at a 10-person D2C startup (SQL, Excel, dashboards)';
 const ownerKey = crypto.randomBytes(16).toString('hex');
 const names = ['Aarav Sharma', 'Priya Nair', 'Rohan Mehta', 'Sneha Iyer', 'Imran Khan'];
+const candidateProfiles = [
+  { headline: 'Aspiring data analyst', college: 'Maharaja Sayajirao University of Baroda', city: 'Vadodara' },
+  { headline: 'Business analytics graduate', college: 'Savitribai Phule Pune University', city: 'Pune' },
+  { headline: 'Junior data analyst', college: 'Devi Ahilya Vishwavidyalaya', city: 'Indore' },
+  { headline: 'Statistics and reporting enthusiast', college: 'University of Mysore', city: 'Mysuru' },
+  { headline: 'SQL and dashboard learner', college: 'Dr. Babasaheb Ambedkar Marathwada University', city: 'Aurangabad' },
+];
 const candidates = [
   {
     answer: 'Because duplicate order IDs can distort totals, I would use SQL to flag duplicates before comparing weekly revenue. I would assume each order timestamp uses the same timezone and verify that assumption with a small example. I would measure revenue and repeat purchases against a four-week baseline, then segment by product and promotion. The main trade-off is speed versus validating every anomaly, so I would check the largest changes first. I would report the risk of missing rare errors before recommending a campaign change.',
@@ -87,6 +94,15 @@ try {
   const startedAt = new Date(Date.now() - 40 * 60 * 1000);
   const deadline = new Date(Date.now() - 10 * 60 * 1000);
   const submissions = [];
+  const users = await Promise.all(names.map(async (name, index) => {
+    const email = `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+    const profile = candidateProfiles[index];
+    return User.findOneAndUpdate(
+      { email },
+      { $set: { name, email, passwordHash: hashPassword('demo12345'), ...profile, showOnLeaderboard: true } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+  }));
 
   for (let index = 0; index < candidates.length; index++) {
     const { answer, spoken } = candidates[index];
@@ -100,6 +116,7 @@ try {
     }));
     const submission = new Submission({
       challengeId: challenge._id,
+      userId: users[index]._id,
       name: names[index],
       email: `${names[index].toLowerCase().replace(/\s+/g, '.')}@example.com`,
       startedAt,
@@ -139,6 +156,7 @@ try {
   console.log(`Candidate link: /c/${challenge.id}`);
   console.log(`Dashboard path: /dashboard/${challenge.id}`);
   console.log(`Paste this once in the frontend browser console: localStorage.setItem("pi_owner_${challenge.id}", JSON.stringify("${ownerKey}"))`);
+  console.log('Demo candidate login: aarav.sharma@example.com / demo12345');
 } catch (error) {
   console.error(error.message || error);
   process.exitCode = 1;

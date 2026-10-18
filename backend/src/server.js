@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import challenges from './routes/challenges.js';
 import submissions from './routes/submissions.js';
 import badges from './routes/badges.js';
+import auth from './routes/auth.js';
+import leaderboard from './routes/leaderboard.js';
 import { Challenge } from './models.js';
 import { hashSecret } from './util.js';
 
@@ -16,6 +18,8 @@ app.get('/api/health', (req, res) => res.json({ ok: true, mock: process.env.AI_M
 app.use('/api/challenges', challenges);
 app.use('/api/submissions', submissions);
 app.use('/api/badges', badges);
+app.use('/api/auth', auth);
+app.use('/api/leaderboard', leaderboard);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

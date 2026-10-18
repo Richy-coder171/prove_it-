@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Challenge, Submission } from '../models.js';
-import { requireOwner } from '../middleware.js';
+import { optionalUser, requireOwner } from '../middleware.js';
 import { asyncHandler } from '../util.js';
 import { generateChallenge } from '../graders.js';
 import crypto from 'crypto';
@@ -113,10 +113,12 @@ router.get('/:id', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/:id/start', asyncHandler(async (req, res) => {
+router.post('/:id/start', optionalUser, asyncHandler(async (req, res) => {
   const challenge = await Challenge.findById(req.params.id).catch(() => null);
   if (!challenge || challenge.status !== 'live') return res.status(404).json({ error: 'Challenge not found or not published' });
-  const { name, email, retry = false } = req.body || {};
+  const { retry = false } = req.body || {};
+  const name = req.user ? req.user.name : req.body?.name;
+  const email = req.user ? req.user.email : req.body?.email;
   if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return res.status(400).json({ error: 'A valid email is required' });
   if (typeof retry !== 'boolean') return res.status(400).json({ error: 'Retry must be a boolean' });
@@ -128,7 +130,7 @@ router.post('/:id/start', asyncHandler(async (req, res) => {
   const startedAt = new Date();
   const candidateToken = crypto.randomBytes(32).toString('hex');
   const submission = await Submission.create({
-    challengeId: challenge._id, name: name.trim(), email: normalizedEmail,
+    challengeId: challenge._id, ...(req.user ? { userId: req.user._id } : {}), name: name.trim(), email: normalizedEmail,
     startedAt, deadline: new Date(startedAt.getTime() + challenge.timeLimitMin * 60_000), status: 'started', candidateTokenHash: hashSecret(candidateToken),
   });
   res.status(201).json({ ...submissionView(submission), candidateToken });

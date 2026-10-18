@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 export const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -6,6 +6,24 @@ export const asyncHandler = (fn) => (req, res, next) =>
 export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
 export const hashSecret = (value) => createHash('sha256').update(String(value)).digest('hex');
+
+export function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(password, salt, 64).toString('hex')}`;
+}
+
+export function verifyPassword(password, stored) {
+  try {
+    if (typeof password !== 'string' || typeof stored !== 'string') return false;
+    const [salt, expected, ...extra] = stored.split(':');
+    if (extra.length || !/^[a-f0-9]{32}$/i.test(salt) || !/^[a-f0-9]{128}$/i.test(expected)) return false;
+    const actual = scryptSync(password, salt, 64);
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 export function safeEqualHex(left, right) {
   if (!/^[a-f0-9]{64}$/i.test(String(left || '')) || !/^[a-f0-9]{64}$/i.test(String(right || ''))) return false;

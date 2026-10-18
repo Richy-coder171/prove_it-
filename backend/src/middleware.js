@@ -1,4 +1,4 @@
-import { Challenge, Submission } from './models.js';
+import { Challenge, Submission, User } from './models.js';
 import { asyncHandler, hashSecret, safeEqualHex } from './util.js';
 
 // Loads req.challenge from :id (404 if missing or bad id).
@@ -18,6 +18,32 @@ export const loadSubmission = asyncHandler(async (req, res, next) => {
   if (!req.challenge) return res.status(404).json({ error: 'Challenge not found' });
   next();
 });
+
+export const optionalUser = asyncHandler(async (req, res, next) => {
+  req.user = null;
+  req.authTokenHash = null;
+  const authorization = req.get('authorization') || '';
+  const match = authorization.match(/^Bearer\s+([a-f0-9]{64})$/i);
+  if (match) {
+    const tokenHash = hashSecret(match[1]);
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    try {
+      req.user = await User.findOne({
+        sessions: { $elemMatch: { hash: tokenHash, createdAt: { $gte: cutoff, $lte: now } } },
+      }).select('+sessions');
+      if (req.user) req.authTokenHash = tokenHash;
+    } catch {
+      req.user = null;
+    }
+  }
+  next();
+});
+
+export const requireUser = [optionalUser, (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Please log in' });
+  next();
+}];
 
 // The poster proves ownership with the header  x-owner-key: <ownerKey>
 const checkOwner = asyncHandler(async (req, res, next) => {
@@ -39,12 +65,14 @@ const checkOwner = asyncHandler(async (req, res, next) => {
 
 const checkCandidate = (req, res, next) => {
   const supplied = req.get('x-candidate-token');
-  if (!supplied || !req.submission.candidateTokenHash || !safeEqualHex(hashSecret(supplied), req.submission.candidateTokenHash)) {
-    return res.status(403).json({ error: 'Candidate session token required' });
-  }
+  const validToken = supplied && req.submission.candidateTokenHash
+    && safeEqualHex(hashSecret(supplied), req.submission.candidateTokenHash);
+  const validUser = req.user && req.submission.userId
+    && String(req.user._id) === String(req.submission.userId);
+  if (!validToken && !validUser) return res.status(403).json({ error: 'Candidate session token required' });
   next();
 };
 
 export const requireOwner = [loadChallenge, checkOwner]; // routes where :id is a challenge id
 export const requireOwnerOfSubmission = [loadSubmission, checkOwner]; // routes where :id is a submission id
-export const requireCandidate = [loadSubmission, checkCandidate];
+export const requireCandidate = [loadSubmission, optionalUser, checkCandidate];

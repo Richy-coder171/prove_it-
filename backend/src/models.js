@@ -25,6 +25,7 @@ const challengeSchema = new Schema(
 const submissionSchema = new Schema(
   {
     challengeId: { type: Schema.Types.ObjectId, ref: 'Challenge', index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     name: String,
     email: String,
     startedAt: Date,
@@ -46,5 +47,23 @@ const submissionSchema = new Schema(
   { timestamps: true },
 );
 
+const userSchema = new Schema(
+  {
+    name: String,
+    email: { type: String, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, select: false },
+    sessions: { type: [{ hash: String, createdAt: Date }], select: false },
+    headline: { type: String, default: '' },
+    college: { type: String, default: '' },
+    city: { type: String, default: '' },
+    bio: { type: String, default: '' },
+    linkedin: { type: String, default: '' },
+    github: { type: String, default: '' },
+    showOnLeaderboard: { type: Boolean, default: true },
+  },
+  { timestamps: true },
+);
+
 export const Challenge = mongoose.models.Challenge || mongoose.model('Challenge', challengeSchema);
 export const Submission = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);
+export const User = mongoose.models.User || mongoose.model('User', userSchema);
