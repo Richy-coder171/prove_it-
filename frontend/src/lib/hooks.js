@@ -41,11 +41,11 @@ export function useSpeech(lang = 'en-IN') {
 }
 
 export function useAsync(fn, deps = []) {
-  const [state, setState] = useState({ data: null, loading: true, error: '' });
+  const [state, setState] = useState({ data: null, loading: true, error: '', errorStatus: null });
   const load = useCallback(() => {
     setState((s) => ({ ...s, loading: true, error: '' }));
-    fn().then((data) => setState({ data, loading: false, error: '' }))
-        .catch((e) => setState({ data: null, loading: false, error: e.message }));
+    fn().then((data) => setState({ data, loading: false, error: '', errorStatus: null }))
+        .catch((e) => setState({ data: null, loading: false, error: e.message, errorStatus: e.status || null }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(load, [load]);

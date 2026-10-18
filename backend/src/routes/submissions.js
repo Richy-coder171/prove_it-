@@ -1,14 +1,12 @@
 import { Router } from 'express';
-import crypto from 'crypto';
 import { Submission } from '../models.js';
 import { requireCandidate, requireOwnerOfSubmission } from '../middleware.js';
 import { asyncHandler, signBadge } from '../util.js';
 import { generateFollowups, generateSkillGaps, gradeSubmission } from '../graders.js';
 import { submissionView } from './challenges.js';
+import { scoreTotal, syncBadgeState } from '../badge-state.js';
 
 const router = Router();
-const totalOf = (criteria = []) => Math.round(criteria.reduce((sum, item) => sum + Number(item.points || 0), 0));
-const badgeId = () => `PI-${crypto.randomBytes(2).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 
 router.get('/:id/owner', requireOwnerOfSubmission, (req, res) => res.json(submissionView(req.submission)));
 
@@ -26,20 +24,23 @@ router.post('/:id/override', requireOwnerOfSubmission, asyncHandler(async (req, 
   if (!item) return res.status(404).json({ error: 'Scoring criterion not found' });
   if (!Number.isFinite(value) || value < 0 || value > Number(item.weight)) return res.status(400).json({ error: `Points must be between 0 and ${item.weight}` });
   item.aiPoints ??= item.points;
+  const previousPoints = Number(item.points || 0);
   item.points = Math.round(value * 100) / 100;
   item.percent = item.weight ? Math.round(item.points / item.weight * 10000) / 100 : 0;
   item.overridden = true;
   item.overrideNote = String(note).trim();
-  req.submission.score.total = totalOf(req.submission.score.criteria);
+  req.submission.score.total = scoreTotal(req.submission.score.criteria);
   const reasoning = req.submission.score.criteria.find((row) => /reason|analysis|problem.?solv/i.test(row.name));
   req.submission.score.reasoning = reasoning?.points || 0;
+  req.submission.scoreOverrides = [...(req.submission.scoreOverrides || []), {
+    criterion: String(criterion),
+    previousPoints,
+    newPoints: item.points,
+    note: String(note).trim(),
+    at: new Date(),
+  }].slice(-50);
   req.submission.markModified('score');
-  if (req.submission.badge) {
-    req.submission.badge.total = req.submission.score.total;
-    req.submission.badge.criteria = req.submission.score.criteria.map(({ name, weight, points, why }) => ({ name, weight, points, why }));
-    req.submission.badge.signature = signBadge(req.submission.badge);
-    req.submission.markModified('badge');
-  }
+  syncBadgeState(req.submission, req.challenge, { reason: 'score_override' });
   await req.submission.save();
   res.json(submissionView(req.submission));
 }));
@@ -75,19 +76,7 @@ router.post('/:id/defend', requireCandidate, asyncHandler(async (req, res) => {
   req.submission.qa = req.submission.questions.map((q, index) => ({ q, a: answers[index].trim() }));
   req.submission.score = await gradeSubmission(req.challenge, req.submission.answer, req.submission.qa);
   req.submission.status = 'graded';
-  if (req.submission.score.total >= 70) {
-    const badge = {
-      badgeId: badgeId(), name: req.submission.name, skill: req.challenge.skill,
-      level: req.submission.score.total >= 85 ? 'Advanced' : 'Intermediate', total: req.submission.score.total, issuedAt: new Date().toISOString(),
-      authenticity: req.submission.score.authenticity?.level || null,
-      mentor: req.submission.mentor?.name ? { name: req.submission.mentor.name, note: req.submission.mentor.note || '' } : null,
-      challengeTitle: req.challenge.title,
-      criteria: req.submission.score.criteria.map(({ name, weight, points, why }) => ({ name, weight, points, why })),
-    };
-    badge.signature = signBadge(badge);
-    req.submission.badge = badge;
-    req.submission.badgeId = badge.badgeId;
-  }
+  syncBadgeState(req.submission, req.challenge, { reason: 'initial_grade' });
   await req.submission.save();
   res.json(submissionView(req.submission));
 }));
@@ -107,7 +96,7 @@ router.post('/:id/skill-gap', requireCandidate, asyncHandler(async (req, res) =>
 }));
 
 router.post('/:id/badge-visibility', requireCandidate, asyncHandler(async (req, res) => {
-  if (!req.submission.badgeId || !req.submission.badge) return res.status(409).json({ error: 'This attempt has no verified badge' });
+  if (!req.submission.badgeId || !req.submission.badge || req.submission.badgeStatus === 'revoked') return res.status(409).json({ error: 'This attempt has no verified badge' });
   if (typeof req.body?.public !== 'boolean') return res.status(400).json({ error: 'public must be a boolean' });
   req.submission.badgeBreakdownPublic = req.body.public;
   await req.submission.save();

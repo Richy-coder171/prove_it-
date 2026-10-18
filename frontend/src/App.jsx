@@ -14,9 +14,11 @@ import { useAuth } from './lib/auth.jsx';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 export default function App() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading, sessionError } = useAuth();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+
+  if (authLoading) return <main className="page"><div className="card center" aria-live="polite"><span className="spinner" /> Checking your session…</div></main>;
 
   async function signOut() {
     await logout();
@@ -49,6 +51,7 @@ export default function App() {
         </AnimatePresence>
       </header>
       <main className="page">
+        {sessionError && <div className="notice" role="status" style={{ marginBottom: 16 }}>{sessionError} Some account data may be stale until the connection returns.</div>}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/post" element={<Post />} />

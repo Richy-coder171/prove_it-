@@ -28,7 +28,7 @@ prove it/
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 20 or newer (required by the current secure React Router release)
 - npm
 - MongoDB running locally or a MongoDB URI you can access
 
@@ -50,6 +50,8 @@ cp backend/.env.example backend/.env
 ```
 
 Set a private, long random value for `BADGE_SECRET` before using real badges. Keep `.env` private and do not commit it. The current local configuration uses `AI_MOCK=1` and leaves provider credentials empty.
+
+The demo seed is deliberately more restrictive than normal local development. Run it only with a loopback MongoDB URI and explicit confirmations, for example `PROVEIT_ENV=local PROVEIT_SEED_CONFIRM=LOCAL_DEMO AI_MOCK=1 npm run seed` from `backend`. `AI_MOCK=1` by itself is not sufficient, and remote/production MongoDB URIs are rejected. Demo passwords and owner keys printed by the script are development-only.
 
 ### Environment variables
 
@@ -89,6 +91,8 @@ Vite serves the client at [http://localhost:5173](http://localhost:5173) and pro
 
 The frontend can also use a different API origin by setting `VITE_API_URL` in the frontend environment; leave it empty for the local Vite proxy.
 
+Login and signup abuse protection uses bounded in-memory fixed-window counters. This is suitable for the existing single-instance/local setup; deployments with multiple API instances should place equivalent rate limiting at the shared edge or use shared storage so limits apply across instances.
+
 ## Health check
 
 ```sh
@@ -114,7 +118,9 @@ The server waits for a successful MongoDB connection before it starts listening.
 | `/c/:id` | Candidate task and timed answer flow |
 | `/result/:sid` | Candidate score, evidence, and next steps |
 | `/badge/:badgeId` | Public badge verification page |
-| `/feed` | Opportunity feed placeholder |
+| `/feed` | Public opportunity feed |
+| `/profile` | Authenticated profile, statistics, and attempt history |
+| `/leaderboard` | Opt-in public verified-badge rankings |
 
 The frontend stores a challenge owner key and candidate session in browser local storage so the poster can return to the private review pages and a candidate can resume an attempt in the same browser.
 

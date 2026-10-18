@@ -12,7 +12,7 @@ export default function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
+  const [showOnLeaderboard, setShowOnLeaderboard] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -77,9 +77,9 @@ export default function Login() {
               {mode === 'signup' && <div>
                 <label className="row small" htmlFor="auth-leaderboard" style={{ alignItems: 'flex-start' }}>
                   <input id="auth-leaderboard" type="checkbox" checked={showOnLeaderboard} onChange={(event) => setShowOnLeaderboard(event.target.checked)} style={{ width: 'auto', minHeight: 0, marginTop: 4 }} />
-                  <span>Show my verified badges on the public leaderboard</span>
+                  <span>Show my supported badge information on the public leaderboard</span>
                 </label>
-                <div className="muted small">You can change this any time in your profile.</div>
+                <div className="muted small">If enabled, your name, skill, score, level, and mentor name for qualifying badges may be displayed publicly. You can change this any time in your profile.</div>
               </div>}
             </motion.div>
           </AnimatePresence>

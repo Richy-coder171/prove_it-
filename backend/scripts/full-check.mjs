@@ -4,6 +4,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Challenge, Submission } from '../src/models.js';
 import { gradeSubmission } from '../src/graders.js';
+import { BADGE_ISSUE_THRESHOLD } from '../src/badge-state.js';
 import { evidencePresent, hashSecret } from '../src/util.js';
 
 const baseUrl = (process.env.API_URL || 'http://localhost:5000').replace(/\/+$/, '');
@@ -175,6 +176,12 @@ await step(6, 'Override criterion and re-sign badge', async () => {
   if (!adjusted?.overridden || Number(adjusted.points) !== points) throw new Error(`Override not reflected in criterion: ${JSON.stringify(adjusted)}`);
   state.score = result.score;
   if (state.badgeId) {
+    state.badgePublic = Number(result.score.total) >= BADGE_ISSUE_THRESHOLD;
+    if (!state.badgePublic) {
+      const revoked = await request('GET', `/badges/${state.badgeId}`);
+      if (revoked.status !== 404) throw new Error(`A badge below the issuance threshold should be hidden publicly: ${JSON.stringify(revoked)}`);
+      return { criterion: criterion.name, oldTotal: before, newTotal: result.score.total, overridden: adjusted.overridden, invalidOwner: denied.status, badgeChecked: true, revoked: true };
+    }
     const badge = expect(await request('GET', `/badges/${state.badgeId}`), 200, 'Read adjusted badge');
     if (badge.verified !== true || Number(badge.total) !== Number(result.score.total) || badge.breakdownPublic !== false || badge.criteria.length) throw new Error(`Adjusted badge verification/privacy unexpected: ${JSON.stringify(badge)}`);
     const visibility = expect(await request('POST', `/submissions/${state.submissionId}/badge-visibility`, { candidateToken: state.candidateToken, body: { public: true } }), 200, 'Publish badge breakdown');
@@ -210,7 +217,7 @@ await step(7, 'Require owner key for mentor endorsement', async () => {
   if (wrongKey.status !== 403) throw new Error(`Mentor request with wrong key expected HTTP 403, got ${wrongKey.status}`);
   const result = expect(await request('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: state.ownerKey, body }), 200, 'Endorse submission with owner key');
   if (result.mentor?.name !== body.mentorName || result.mentor?.note !== body.note) throw new Error(`Mentor details missing from response: ${JSON.stringify(result.mentor)}`);
-  if (state.badgeId) {
+  if (state.badgeId && state.badgePublic) {
     const badge = expect(await request('GET', `/badges/${state.badgeId}`), 200, 'Read endorsed badge');
     if (badge.verified !== true || badge.mentor?.name !== body.mentorName || badge.mentor?.note !== body.note) throw new Error(`Endorsed badge mismatch: ${JSON.stringify(badge)}`);
   }
