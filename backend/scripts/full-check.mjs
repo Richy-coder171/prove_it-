@@ -13,12 +13,12 @@ let blocked = false;
 const state = {};
 const totalSteps = 11;
 
-async function request(method, path, { body, ownerKey, candidateToken } = {}) {
+async function request(method, path, { body, ownerKey, candidateToken, authToken } = {}) {
   let response;
   try {
     response = await fetch(`${baseUrl}/api${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(ownerKey ? { 'x-owner-key': ownerKey } : {}), ...(candidateToken ? { 'x-candidate-token': candidateToken } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}), ...(ownerKey ? { 'x-owner-key': ownerKey } : {}), ...(candidateToken ? { 'x-candidate-token': candidateToken } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
@@ -37,6 +37,8 @@ function expect(result, status, label) {
   return result.data;
 }
 
+const startupRequest = (method, path, options = {}) => request(method, path, { ...options, authToken: state.authToken });
+
 async function step(number, label, run) {
   if (blocked) {
     console.log(`FAIL ${number}/${totalSteps} ${label}: skipped because an earlier step failed`);
@@ -54,7 +56,15 @@ async function step(number, label, run) {
 }
 
 await step(1, 'Founder Mode end to end', async () => {
-  const generated = expect(await request('POST', '/challenges/generate', { body: {
+  const account = expect(await request('POST', '/auth/signup', { body: {
+    name: 'Full Check Startup',
+    email: `full-check-startup-${Date.now()}@example.test`,
+    password: 'full-check-password-123',
+    role: 'startup',
+  } }), 201, 'Create full-check startup account');
+  if (account.user?.role !== 'startup' || !account.token) throw new Error(`Startup account was not created: ${JSON.stringify(account)}`);
+  state.authToken = account.token;
+  const generated = expect(await startupRequest('POST', '/challenges/generate', { body: {
     mode: 'idea',
     text: 'A neighborhood tiffin delivery service for university hostels, connecting students with nearby home cooks through weekly meal subscriptions and simple UPI payments.',
     posterName: 'Full check founder',
@@ -64,7 +74,7 @@ await step(1, 'Founder Mode end to end', async () => {
   state.challengeId = generated.challenge.id;
   state.ownerKey = generated.ownerKey;
 
-  const updated = expect(await request('PUT', `/challenges/${state.challengeId}`, { ownerKey: state.ownerKey, body: {
+  const updated = expect(await startupRequest('PUT', `/challenges/${state.challengeId}`, { ownerKey: state.ownerKey, body: {
     title: 'Founder Mode: validate a tiffin delivery launch',
     task: 'Plan a small launch for a hostel tiffin service. Choose how to recruit cooks, test weekly subscriptions, measure repeat orders, and validate whether UPI payments and delivery operations are reliable.',
     timeLimitMin: 30,
@@ -78,7 +88,7 @@ await step(1, 'Founder Mode end to end', async () => {
   } }), 200, 'Update Founder Mode draft');
   if (updated.status !== 'draft' || updated.rubric?.reduce((sum, row) => sum + Number(row.weight), 0) !== 100) throw new Error(`Unexpected updated challenge: ${JSON.stringify(updated)}`);
 
-  const approved = expect(await request('POST', `/challenges/${state.challengeId}/approve`, { ownerKey: state.ownerKey }), 200, 'Approve Founder Mode challenge');
+  const approved = expect(await startupRequest('POST', `/challenges/${state.challengeId}/approve`, { ownerKey: state.ownerKey }), 200, 'Approve Founder Mode challenge');
   if (approved.status !== 'live') throw new Error(`Expected live status: ${JSON.stringify(approved)}`);
   state.email = `full-check-${Date.now()}@example.test`;
   const started = expect(await request('POST', `/challenges/${state.challengeId}/start`, { body: { name: 'Full Check Candidate', email: state.email } }), 201, 'Start Founder Mode submission');
@@ -115,13 +125,13 @@ await step(1, 'Founder Mode end to end', async () => {
 });
 
 await step(2, 'Reject edits after publishing', async () => {
-  const result = await request('PUT', `/challenges/${state.challengeId}`, { ownerKey: state.ownerKey, body: { title: 'Should not update', task: 'This edit must be rejected.', timeLimitMin: 30, rubric: [{ name: 'Criterion', weight: 100, description: 'A valid rubric.' }], seedQuestions: [] } });
+  const result = await startupRequest('PUT', `/challenges/${state.challengeId}`, { ownerKey: state.ownerKey, body: { title: 'Should not update', task: 'This edit must be rejected.', timeLimitMin: 30, rubric: [{ name: 'Criterion', weight: 100, description: 'A valid rubric.' }], seedQuestions: [] } });
   const data = expect(result, 409, 'Update published challenge');
   return { status: result.status, error: data.error };
 });
 
 await step(3, 'Keep draft challenge private', async () => {
-  const generated = expect(await request('POST', '/challenges/generate', { body: { mode: 'job', text: 'Operations analyst to review a small delivery business pilot, clean order records, and explain patterns to the founding team.', posterName: 'Unpublished full check draft' } }), 201, 'Generate private draft');
+  const generated = expect(await startupRequest('POST', '/challenges/generate', { body: { mode: 'job', text: 'Operations analyst to review a small delivery business pilot, clean order records, and explain patterns to the founding team.', posterName: 'Unpublished full check draft' } }), 201, 'Generate private draft');
   if (!generated.challenge?.id) throw new Error(`Missing draft id: ${JSON.stringify(generated)}`);
   state.draftId = generated.challenge.id;
   const get = await request('GET', `/challenges/${state.draftId}`);
@@ -136,23 +146,23 @@ await step(3, 'Keep draft challenge private', async () => {
 });
 
 await step(4, 'Enforce challenge owner key', async () => {
-  const wrong = await request('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: 'deliberately-wrong-owner-key' });
+  const wrong = await startupRequest('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: 'deliberately-wrong-owner-key' });
   if (wrong.status !== 403) throw new Error(`Wrong key expected HTTP 403, got ${wrong.status}: ${JSON.stringify(wrong.data)}`);
-  const correctResult = await request('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: state.ownerKey });
+  const correctResult = await startupRequest('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: state.ownerKey });
   const correct = expect(correctResult, 200, 'Get challenge with correct owner key');
   const missing = await request('PUT', `/challenges/${state.challengeId}`, { body: { title: 'No', task: 'No', timeLimitMin: 30, rubric: [], seedQuestions: [] } });
-  if (missing.status !== 403) throw new Error(`Missing key edit expected HTTP 403, got ${missing.status}`);
+  if (missing.status !== 401) throw new Error(`Missing authentication for edit expected HTTP 401, got ${missing.status}`);
   const legacyKey = 'legacy-owner-key-for-migration-check';
   const legacy = await Challenge.create({ title: 'Legacy owner key migration check', ownerKey: legacyKey });
-  const migratedResponse = expect(await request('GET', `/challenges/${legacy.id}/owner`, { ownerKey: legacyKey }), 200, 'Migrate legacy owner key');
+  const migratedResponse = expect(await startupRequest('GET', `/challenges/${legacy.id}/owner`, { ownerKey: legacyKey }), 200, 'Migrate legacy owner key');
   const migrated = await Challenge.findById(legacy.id).select('+ownerKeyHash +ownerKey').lean();
   if (migrated.ownerKey || migrated.ownerKeyHash !== hashSecret(legacyKey) || migratedResponse.ownerKey || migratedResponse.ownerKeyHash) throw new Error('Legacy owner key was not safely migrated and removed');
   return { wrongKey: wrong.status, correctKey: correctResult.status, challengeId: correct.id, missingKeyEdit: missing.status, legacyMigrated: true };
 });
 
 await step(5, 'Toggle shortlist twice', async () => {
-  const first = expect(await request('POST', `/submissions/${state.submissionId}/shortlist`, { ownerKey: state.ownerKey }), 200, 'First shortlist toggle');
-  const second = expect(await request('POST', `/submissions/${state.submissionId}/shortlist`, { ownerKey: state.ownerKey }), 200, 'Second shortlist toggle');
+  const first = expect(await startupRequest('POST', `/submissions/${state.submissionId}/shortlist`, { ownerKey: state.ownerKey }), 200, 'First shortlist toggle');
+  const second = expect(await startupRequest('POST', `/submissions/${state.submissionId}/shortlist`, { ownerKey: state.ownerKey }), 200, 'Second shortlist toggle');
   if (Boolean(first.shortlisted) === Boolean(second.shortlisted)) throw new Error(`Expected shortlist to flip; got ${first.shortlisted} then ${second.shortlisted}`);
   return { first: Boolean(first.shortlisted), second: Boolean(second.shortlisted) };
 });
@@ -166,11 +176,11 @@ await step(6, 'Override criterion and re-sign badge', async () => {
   });
   if (!criterion) throw new Error(`No positive-weight criterion found in score: ${JSON.stringify(state.score)}`);
   const before = Number(state.score.total);
-  const denied = await request('POST', `/submissions/${state.submissionId}/override`, { ownerKey: 'wrong-owner-key', body: { criterion: criterion.name, points: 0 } });
+  const denied = await startupRequest('POST', `/submissions/${state.submissionId}/override`, { ownerKey: 'wrong-owner-key', body: { criterion: criterion.name, points: 0 } });
   if (denied.status !== 403) throw new Error(`Invalid owner override expected 403, got ${denied.status}`);
   const sum = criteria.reduce((total, item) => total + Number(item.points || 0), 0);
   const points = [0, Number(criterion.weight), Number(criterion.weight) / 2].find((value) => Math.round(sum - Number(criterion.points || 0) + value) !== before);
-  const result = expect(await request('POST', `/submissions/${state.submissionId}/override`, { ownerKey: state.ownerKey, body: { criterion: criterion.name, points, note: 'Full-check override validation.' } }), 200, 'Override criterion');
+  const result = expect(await startupRequest('POST', `/submissions/${state.submissionId}/override`, { ownerKey: state.ownerKey, body: { criterion: criterion.name, points, note: 'Full-check override validation.' } }), 200, 'Override criterion');
   if (Number(result.score?.total) === before) throw new Error(`Override did not change total from ${before}: ${JSON.stringify(result.score)}`);
   const adjusted = result.score?.criteria?.find((row) => row.name === criterion.name);
   if (!adjusted?.overridden || Number(adjusted.points) !== points) throw new Error(`Override not reflected in criterion: ${JSON.stringify(adjusted)}`);
@@ -212,10 +222,10 @@ await step(6, 'Override criterion and re-sign badge', async () => {
 await step(7, 'Require owner key for mentor endorsement', async () => {
   const body = { mentorName: 'Full Check Mentor', note: 'Reviewed the candidate’s pilot plan and evidence checks.' };
   const missingKey = await request('POST', `/submissions/${state.submissionId}/mentor`, { body });
-  if (missingKey.status !== 403) throw new Error(`Mentor request without key expected HTTP 403, got ${missingKey.status}: ${JSON.stringify(missingKey.data)}`);
-  const wrongKey = await request('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: 'wrong-owner-key', body });
+  if (missingKey.status !== 401) throw new Error(`Mentor request without authentication expected HTTP 401, got ${missingKey.status}: ${JSON.stringify(missingKey.data)}`);
+  const wrongKey = await startupRequest('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: 'wrong-owner-key', body });
   if (wrongKey.status !== 403) throw new Error(`Mentor request with wrong key expected HTTP 403, got ${wrongKey.status}`);
-  const result = expect(await request('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: state.ownerKey, body }), 200, 'Endorse submission with owner key');
+  const result = expect(await startupRequest('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: state.ownerKey, body }), 200, 'Endorse submission with owner key');
   if (result.mentor?.name !== body.mentorName || result.mentor?.note !== body.note) throw new Error(`Mentor details missing from response: ${JSON.stringify(result.mentor)}`);
   if (state.badgeId && state.badgePublic) {
     const badge = expect(await request('GET', `/badges/${state.badgeId}`), 200, 'Read endorsed badge');

@@ -19,6 +19,7 @@ async function request(method, path, body, ownerKey, candidateToken) {
 }
 export const api = {
   generateChallenge: (body) => request('POST', '/challenges/generate', body),
+  myChallenges: () => request('GET', '/challenges/mine'),
   getChallengeOwner: (id, key) => request('GET', `/challenges/${id}/owner`, null, key),
   updateChallenge: (id, body, key) => request('PUT', `/challenges/${id}`, body, key),
   approveChallenge: (id, key) => request('POST', `/challenges/${id}/approve`, null, key),

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
 import { useAuth } from '../lib/auth.jsx';
+import { getAccountRole } from '../lib/roles.js';
 
 const fields = [
   ['name', 'Name', 'text'],
@@ -117,7 +118,7 @@ export default function Profile() {
       </section>
       <section className="card stack">
         <div><h2>Your challenge history</h2><p className="muted small">Scores and badges shown here come from your authenticated account.</p></div>
-        {!attempts.length ? <p className="muted">No challenge attempts yet. <Link to="/feed">Explore open challenges</Link>.</p> : <div style={{ overflowX: 'auto' }}>
+        {!attempts.length ? <p className="muted">No challenge attempts yet. {getAccountRole(user) === 'candidate' ? <><Link to="/feed">Explore open challenges</Link>.</> : <><Link to="/startup/dashboard">Return to your startup dashboard</Link>.</>}</p> : <div style={{ overflowX: 'auto' }}>
           <table className="table">
             <thead><tr><th>Challenge</th><th>Skill</th><th>Status</th><th>Score</th><th>Credential</th></tr></thead>
             <tbody>{attempts.map((attempt) => <tr key={attempt.submissionId}>

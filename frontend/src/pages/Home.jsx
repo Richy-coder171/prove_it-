@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Login from './Login.jsx';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -146,13 +147,22 @@ export default function Home() {
           <h1><span>Show the work <span className="home__headline-art" aria-hidden="true"><svg viewBox="0 0 72 38"><path d="M5 29 20 19l12 5 14-14 20 7" /><circle cx="46" cy="10" r="3" /></svg></span></span><span>Defend it.</span></h1>
           <p>Anyone can get an AI to write an answer. ProveIt finds the people who can defend it.</p>
           <div className="home__actions">
-            <Link className="home__button" to="/post">Post a challenge</Link>
-            <Link className="home__text-link" to="/feed">See opportunities</Link>
+            <Link className="home__button" to="/register">Create your account</Link>
+            <Link className="home__text-link" to="/login">Log in</Link>
           </div>
         </div>
         <div className="home__hero-image">
           <ProofReceipt mode={mode} onModeChange={setMode} />
         </div>
+      </section>
+
+      <section className="home__access" id="access">
+        <div className="home__access-copy">
+          <span className="home__eyebrow">Start with the right workspace</span>
+          <h2>Proof that travels with you.</h2>
+          <p>Choose a candidate workspace to discover opportunities, or a startup workspace to turn real work into a fair hiring signal.</p>
+        </div>
+        <div className="home__access-card"><Login /></div>
       </section>
 
       <div className="home__marquee" role="img" aria-label="Platform flow: task, defence, evidence, human review, verified badge">
@@ -217,28 +227,28 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home__close" id="create-challenge">
+      <section className="home__close" id="proof-path">
         <div className="home__close-copy">
           <h2>Make proof<br />the starting point.</h2>
-          <p>Post a challenge for a job or an idea, or find an open opportunity to solve.</p>
+          <p>Build a clearer signal from real work, careful explanations, and evidence that people can verify.</p>
           <div className="home__actions">
-            <Link className="home__button home__button--dark" to="/post">Post a challenge</Link>
-            <Link className="home__text-link home__text-link--dark" to="/feed">See opportunities</Link>
+            <Link className="home__button home__button--dark" to="/register">Create your account</Link>
+            <Link className="home__text-link home__text-link--dark" to="/login">Log in</Link>
           </div>
         </div>
         <div className="home__close-ui">
           <div className="home__create-ui">
             <span className="home__ui-label">First, choose what you’re building</span>
-            <h3>Create a challenge</h3>
+            <h3>Real work. Clear proof.</h3>
             <div className="home__create-choices" aria-label="Challenge type examples">
               <span>I’m hiring</span>
               <span>I have an idea</span>
             </div>
-            <p>AI drafts the task and scoring rubric. Review it before anything goes live.</p>
-            <Link className="home__button home__button--dark" to="/post">Start a challenge</Link>
+            <p>Both paths are grounded in practical tasks, thoughtful defence, and evidence-led results.</p>
+            <Link className="home__button home__button--dark" to="/register">Choose your workspace</Link>
           </div>
         </div>
-        <footer className="home__footer"><span>ProveIt</span><nav aria-label="Footer"><Link to="/feed">Open challenges</Link><Link to="/post">Create a challenge</Link></nav><span>Proof before pedigree.</span></footer>
+        <footer className="home__footer"><span>ProveIt</span><nav aria-label="Footer"><Link to="/login">Log in</Link><Link to="/register">Create account</Link></nav><span>Proof before pedigree.</span></footer>
       </section>
     </div>
   );

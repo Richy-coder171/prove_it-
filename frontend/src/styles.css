@@ -181,6 +181,11 @@ details > summary { cursor:pointer; font-weight:750; }
 .home__text-link { min-height:44px; display:inline-flex; align-items:center; color:var(--text); text-decoration:underline; text-decoration-color:rgba(244,241,233,.36); text-underline-offset:.28em; }
 .home__text-link:hover { color:var(--accent-2); text-decoration-color:currentColor; }
 .home__hero-image { grid-column:8 / 13; position:relative; min-width:0; display:flex; align-items:center; }
+.home__access { padding:clamp(64px,9vw,120px) var(--home-gutter); display:grid; grid-template-columns:minmax(0,.8fr) minmax(360px,1fr); align-items:center; gap:clamp(28px,7vw,110px); background:#101a21; }
+.home__access-copy h2 { max-width:10ch; margin-top:18px; font-size:clamp(2.8rem,5vw,5.5rem); line-height:.94; letter-spacing:-.065em; }
+.home__access-copy p { max-width:38ch; margin-top:22px; color:var(--muted); font-size:1.05rem; }
+.home__access-card { min-width:0; }
+.home__access-card > div { max-width:560px!important; margin-left:auto!important; margin-right:0!important; }
 .home__hero-image::before { position:absolute; inset:8% -8% 8% 7%; border:1px solid rgba(105,210,192,.2); border-radius:50%; content:""; transform:rotate(-18deg); }
 .home__receipt { position:relative; width:112%; min-height:430px; margin-left:-3%; padding:clamp(22px,3vw,38px); display:flex; flex-direction:column; justify-content:space-between; border:1px solid rgba(168,182,186,.26); border-radius:22px; background:linear-gradient(150deg,rgba(255,255,255,.075),transparent 52%),var(--panel); box-shadow:0 36px 90px rgba(0,0,0,.34); transform:rotate(2.2deg); }
 .home__receipt-top,.home__receipt-foot,.home__ui-meta,.home__score-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
@@ -329,6 +334,8 @@ details > summary { cursor:pointer; font-weight:750; }
   .home__audience-detail > p { font-size:1.55rem; }
   .home__responsible { grid-template-columns:minmax(0,1fr); gap:32px; padding-block:76px; }
   .home__responsible-copy,.home__responsible-ui { grid-column:1; }
+  .home__access { grid-template-columns:minmax(0,1fr); }
+  .home__access-card > div { max-width:620px!important; margin-inline:auto!important; }
   .home__responsible-copy h2 { font-size:3.7rem; }
   .home__review-ui { min-height:270px; }
   .home__close { min-height:0; grid-template-columns:minmax(0,1fr); row-gap:32px; padding-block:78px 22px; }
