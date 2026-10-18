@@ -80,6 +80,9 @@ function StageInterface({ stage }) {
 }
 
 export default function Home() {
+  useEffect(() => {
+    document.title = 'ProveIt - Prove it. Defend it.';
+  }, []);
   const [mode, setMode] = useState('job');
   const homeRef = useRef(null);
 

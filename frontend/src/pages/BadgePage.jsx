@@ -11,6 +11,9 @@ export default function BadgePage() {
   const [copyError, setCopyError] = useState('');
   const copyTimer = useRef(null);
 
+  useEffect(() => {
+    document.title = badge ? `ProveIt - Badge ${badge.badgeId}` : 'ProveIt - Badge';
+  }, [badge?.badgeId]);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   async function copyLink() {

@@ -1,8 +1,12 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
 
 export default function Feed() {
+  useEffect(() => {
+    document.title = 'ProveIt - Open challenges';
+  }, []);
   const { data: challenges, loading, error } = useAsync(() => api.listLive(), []);
 
   if (loading) return <div className="card center"><span className="spinner" /></div>;

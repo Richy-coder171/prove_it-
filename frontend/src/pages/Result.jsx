@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { getCandidateToken, saveSession } from '../lib/store.js';
@@ -26,6 +26,9 @@ function CriterionCard({ criterion }) {
 }
 
 export default function Result() {
+  useEffect(() => {
+    document.title = 'ProveIt - Your result';
+  }, []);
   const { sid } = useParams();
   const navigate = useNavigate();
   const { data: submission, loading, error: loadError } = useAsync(() => api.getSubmission(sid, getCandidateToken(sid)), [sid]);

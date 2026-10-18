@@ -9,6 +9,9 @@ const withKey = (row) => ({ ...row, _k: `${Date.now()}-${nextRowId++}` });
 const makeQuestion = () => ({ text: '', _k: `${Date.now()}-${nextRowId++}` });
 
 export default function Review() {
+  useEffect(() => {
+    document.title = 'ProveIt - Review challenge';
+  }, []);
   const { id } = useParams();
   const navigate = useNavigate();
   const key = getOwnerKey(id);
@@ -104,7 +107,7 @@ export default function Review() {
 
       <section className="card stack">
         <h2>Scoring rubric</h2>
-        <table className="table">
+        <div style={{ overflowX: "auto" }}><table className="table">
           <thead><tr><th>Criterion</th><th>Weight</th><th>What it measures</th><th aria-label="Actions" /></tr></thead>
           <tbody>
             {form.rubric.map((row, index) => (
@@ -116,7 +119,7 @@ export default function Review() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         <div className="row">
           <button className="btn ghost small" type="button" disabled={busy} onClick={() => updateField('rubric', [...form.rubric, withKey({ name: '', weight: 0, description: '' })])}>Add criterion</button>
           <span>Total weight: <span className={`pill ${total === 100 ? 'good' : 'bad'}`}>{total} / 100</span>{total !== 100 && <span className="muted small"> must be 100</span>}</span>

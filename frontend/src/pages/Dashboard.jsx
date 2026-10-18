@@ -14,6 +14,9 @@ function authenticityTone(label) {
 }
 
 export default function Dashboard() {
+  useEffect(() => {
+    document.title = 'ProveIt - Dashboard';
+  }, []);
   const { id } = useParams();
   const key = getOwnerKey(id);
   const { data: challenge, loading: challengeLoading, error: challengeError } = useAsync(
@@ -105,7 +108,7 @@ export default function Dashboard() {
         <h2>{founderMode ? 'Ranked potential co-founders and teammates' : 'Ranked candidates'}</h2>
         {rowsError && <div className="error" role="alert">{rowsError}</div>}
         {rows.length === 0 && !rowsError ? <p className="muted">No candidates yet. Share the link above.</p> : rows.length > 0 && (
-          <table className="table">
+          <div style={{ overflowX: "auto" }}><table className="table">
             <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Reasoning</th><th>Authenticity</th><th>Flags</th><th>Shortlist</th><th>Badge</th></tr></thead>
             <tbody>
               {rows.map((row, index) => (
@@ -125,7 +128,7 @@ export default function Dashboard() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {actionError && <div className="error" role="alert">{actionError}</div>}
       </section>

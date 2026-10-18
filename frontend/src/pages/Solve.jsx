@@ -6,6 +6,9 @@ import { useCountdown } from '../lib/hooks.js';
 import Defend from '../components/Defend.jsx';
 
 export default function Solve() {
+  useEffect(() => {
+    document.title = 'ProveIt - Solve a challenge';
+  }, []);
   const { id } = useParams();
   const navigate = useNavigate();
   const [retry, setRetry] = useState(() => new URLSearchParams(window.location.search).get('retry') === '1');

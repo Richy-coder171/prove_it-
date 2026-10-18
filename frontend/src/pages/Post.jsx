@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { saveOwnerKey } from '../lib/store.js';
@@ -9,6 +9,9 @@ const examples = {
 };
 
 export default function Post() {
+  useEffect(() => {
+    document.title = 'ProveIt - Create a challenge';
+  }, []);
   const navigate = useNavigate();
   const [mode, setMode] = useState('job');
   const [text, setText] = useState('');
