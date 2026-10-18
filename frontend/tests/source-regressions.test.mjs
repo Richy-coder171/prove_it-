@@ -31,3 +31,20 @@ test('startup auth validation is represented in the provider and protected rende
   assert.match(auth, /error\.status === 401/);
   assert.match(app, /authLoading/);
 });
+
+test('role-aware registration and application routing protect the two workspaces', async () => {
+  const login = await source('Login.jsx');
+  const home = await source('Home.jsx');
+  const app = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const roles = await readFile(new URL('../src/lib/roles.js', import.meta.url), 'utf8');
+  assert.match(login, /I'm a Candidate/);
+  assert.match(login, /I'm a Startup/);
+  assert.match(login, /if \(mode === 'signup' && !role\)/);
+  assert.match(login, /role, showOnLeaderboard/);
+  assert.doesNotMatch(home, /to="\/post"/);
+  assert.doesNotMatch(home, /to="\/feed"/);
+  assert.match(home, /<Login \/>/);
+  assert.match(app, /ProtectedRoute roles=\{\['startup'\]\}/);
+  assert.match(app, /ProtectedRoute roles=\{\['candidate'\]\}/);
+  assert.match(roles, /startup.*dashboard/);
+});

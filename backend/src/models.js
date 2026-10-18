@@ -15,6 +15,9 @@ const challengeSchema = new Schema(
     rubric: [{ _id: false, name: String, weight: Number, description: String }],
     seedQuestions: [String],
     status: { type: String, enum: ['draft', 'live'], default: 'draft' },
+    // New challenges are owned by the authenticated startup. Legacy records
+    // can still be opened with their owner key and are migrated on use.
+    ownerUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     ownerKeyHash: { type: String, select: false },
     // Temporary compatibility for legacy records. Middleware migrates a valid key and unsets it.
     ownerKey: { type: String, select: false },
@@ -63,6 +66,7 @@ const userSchema = new Schema(
     bio: { type: String, default: '' },
     linkedin: { type: String, default: '' },
     github: { type: String, default: '' },
+    role: { type: String, enum: ['candidate', 'startup'], default: 'candidate' },
     showOnLeaderboard: { type: Boolean, default: false },
   },
   { timestamps: true },

@@ -1,5 +1,6 @@
 import { Challenge, Submission, User } from './models.js';
 import { asyncHandler, hashSecret, safeEqualHex } from './util.js';
+import { getAccountRole } from './roles.js';
 
 // Loads req.challenge from :id (404 if missing or bad id).
 export const loadChallenge = asyncHandler(async (req, res, next) => {
@@ -45,8 +46,22 @@ export const requireUser = [optionalUser, (req, res, next) => {
   next();
 }];
 
+export function requireRole(...roles) {
+  return [...requireUser, (req, res, next) => {
+    if (!roles.includes(getAccountRole(req.user.role))) {
+      return res.status(403).json({ error: 'This account does not have permission for this area' });
+    }
+    next();
+  }];
+}
+
 // The poster proves ownership with the header  x-owner-key: <ownerKey>
 const checkOwner = asyncHandler(async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Please log in as a startup' });
+  if (getAccountRole(req.user.role) !== 'startup') return res.status(403).json({ error: 'Startup account required' });
+  if (req.challenge.ownerUserId && String(req.challenge.ownerUserId) !== String(req.user._id)) {
+    return res.status(403).json({ error: 'You do not own this challenge' });
+  }
   const supplied = req.get('x-owner-key');
   if (!supplied) return res.status(403).json({ error: 'Owner key required' });
   const suppliedHash = hashSecret(supplied);
@@ -64,6 +79,9 @@ const checkOwner = asyncHandler(async (req, res, next) => {
 });
 
 const checkCandidate = (req, res, next) => {
+  if (req.user && getAccountRole(req.user.role) !== 'candidate') {
+    return res.status(403).json({ error: 'Candidate account required' });
+  }
   const supplied = req.get('x-candidate-token');
   const validToken = supplied && req.submission.candidateTokenHash
     && safeEqualHex(hashSecret(supplied), req.submission.candidateTokenHash);
@@ -73,6 +91,6 @@ const checkCandidate = (req, res, next) => {
   next();
 };
 
-export const requireOwner = [loadChallenge, checkOwner]; // routes where :id is a challenge id
-export const requireOwnerOfSubmission = [loadSubmission, checkOwner]; // routes where :id is a submission id
+export const requireOwner = [loadChallenge, optionalUser, checkOwner]; // routes where :id is a challenge id
+export const requireOwnerOfSubmission = [loadSubmission, optionalUser, checkOwner]; // routes where :id is a submission id
 export const requireCandidate = [loadSubmission, optionalUser, checkCandidate];

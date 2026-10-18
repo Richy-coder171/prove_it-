@@ -6,12 +6,12 @@ const failures = [];
 let blocked = false;
 const state = {};
 
-async function request(method, path, { body, ownerKey, candidateToken } = {}) {
+async function request(method, path, { body, ownerKey, candidateToken, authToken } = {}) {
   let response;
   try {
     response = await fetch(`${baseUrl}/api${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(ownerKey ? { 'x-owner-key': ownerKey } : {}), ...(candidateToken ? { 'x-candidate-token': candidateToken } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}), ...(ownerKey ? { 'x-owner-key': ownerKey } : {}), ...(candidateToken ? { 'x-candidate-token': candidateToken } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
@@ -43,7 +43,13 @@ async function step(number, label, run) {
 }
 
 await step(1, 'Generate challenge', async () => {
+  const account = await request('POST', '/auth/signup', {
+    body: { name: 'Smoke Startup', email: `smoke-startup-${Date.now()}@example.test`, password: 'smoke-password-123', role: 'startup' },
+  });
+  if (account.user?.role !== 'startup' || !account.token) throw new Error(`Startup account was not created: ${JSON.stringify(account)}`);
+  state.authToken = account.token;
   const result = await request('POST', '/challenges/generate', {
+    authToken: state.authToken,
     body: {
       mode: 'job',
       text: 'Junior Data Analyst at a small online retail startup. Clean sales data, write SQL queries, build weekly spreadsheets, and explain trends to the founders.',
@@ -59,6 +65,7 @@ await step(1, 'Generate challenge', async () => {
 
 await step(2, 'Update draft', async () => {
   const result = await request('PUT', `/challenges/${state.id}`, {
+    authToken: state.authToken,
     ownerKey: state.ownerKey,
     body: {
       title: 'Smoke test: explain a sales trend',
@@ -79,7 +86,7 @@ await step(2, 'Update draft', async () => {
 });
 
 await step(3, 'Approve challenge', async () => {
-  const result = await request('POST', `/challenges/${state.id}/approve`, { ownerKey: state.ownerKey });
+  const result = await request('POST', `/challenges/${state.id}/approve`, { authToken: state.authToken, ownerKey: state.ownerKey });
   if (result.status !== 'live') throw new Error(`Expected status live, received: ${JSON.stringify(result)}`);
   return { id: result.id, status: result.status };
 });
@@ -143,7 +150,7 @@ await step(7, 'Verify public badge when issued', async () => {
 });
 
 await step(8, 'Confirm submission appears on leaderboard', async () => {
-  const result = await request('GET', `/challenges/${state.id}/leaderboard`, { ownerKey: state.ownerKey });
+  const result = await request('GET', `/challenges/${state.id}/leaderboard`, { authToken: state.authToken, ownerKey: state.ownerKey });
   const submission = result.find((row) => row.id === state.submissionId);
   if (!submission) throw new Error(`Submission ${state.submissionId} not present in response: ${JSON.stringify(result)}`);
   return { submissionId: submission.id, total: submission.total };

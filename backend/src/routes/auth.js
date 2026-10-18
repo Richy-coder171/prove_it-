@@ -5,6 +5,7 @@ import { requireUser } from '../middleware.js';
 import { asyncHandler, hashPassword, hashSecret, verifyPassword } from '../util.js';
 import { isPubliclyValidBadge } from '../badge-state.js';
 import { createFixedWindowLimiter } from '../rate-limit.js';
+import { ACCOUNT_ROLES, getAccountRole } from '../roles.js';
 
 const router = Router();
 const windowMs = 15 * 60 * 1000;
@@ -26,6 +27,7 @@ function userView(user) {
     bio: user.bio || '',
     linkedin: user.linkedin || '',
     github: user.github || '',
+    role: getAccountRole(user.role),
     showOnLeaderboard: user.showOnLeaderboard,
     createdAt: user.createdAt,
   };
@@ -45,13 +47,15 @@ router.post('/signup', asyncHandler(async (req, res) => {
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = body.password;
+  const role = typeof body.role === 'string' ? body.role.trim() : '';
   if (name.length < 2 || name.length > 80) return res.status(400).json({ error: 'Name must be between 2 and 80 characters' });
   if (!emailPattern.test(email)) return res.status(400).json({ error: 'Please provide a valid email address' });
   if (typeof password !== 'string' || password.length < 8 || password.length > 128) return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
+  if (!ACCOUNT_ROLES.includes(role)) return res.status(400).json({ error: 'Please choose candidate or startup as your account type' });
   if (body.showOnLeaderboard !== undefined && typeof body.showOnLeaderboard !== 'boolean') return res.status(400).json({ error: 'showOnLeaderboard must be a boolean' });
   if (await User.exists({ email })) return res.status(409).json({ error: 'Unable to create an account with these details' });
 
-  const user = new User({ name, email, passwordHash: hashPassword(password), showOnLeaderboard: body.showOnLeaderboard ?? false });
+  const user = new User({ name, email, role, passwordHash: hashPassword(password), showOnLeaderboard: body.showOnLeaderboard ?? false });
   const token = addSession(user);
   try {
     await user.save();

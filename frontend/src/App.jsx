@@ -1,4 +1,4 @@
-import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Home from './pages/Home.jsx';
 import Post from './pages/Post.jsx';
 import Review from './pages/Review.jsx';
@@ -10,8 +10,30 @@ import Feed from './pages/Feed.jsx';
 import Login from './pages/Login.jsx';
 import Profile from './pages/Profile.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
+import CandidateDashboard from './pages/CandidateDashboard.jsx';
+import StartupDashboard from './pages/StartupDashboard.jsx';
 import { useAuth } from './lib/auth.jsx';
+import { getAccountRole, roleHome } from './lib/roles.js';
+import { BadgeIcon } from './components/DomainVisuals.jsx';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+
+function ProtectedRoute({ roles, children }) {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const role = getAccountRole(user);
+  if (!user) {
+    const next = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+  }
+  if (!role) return <section className="card stack" style={{ maxWidth: 620, margin: '40px auto' }}><h1>Account role unavailable</h1><p className="muted">We could not safely identify this account type. Sign out and contact support before continuing.</p><button className="btn primary" type="button" onClick={logout}>Sign out</button></section>;
+  if (roles && !roles.includes(role)) return <Navigate to={roleHome(user)} replace />;
+  return children;
+}
+
+function LandingRoute() {
+  const { user } = useAuth();
+  return user ? <Navigate to={roleHome(user)} replace /> : <Home />;
+}
 
 export default function App() {
   const { user, logout, loading: authLoading, sessionError } = useAuth();
@@ -28,12 +50,17 @@ export default function App() {
   return (
     <>
       <header className="nav" style={{ flexWrap: 'wrap' }}>
-        <Link to="/" className="logo" aria-label="ProveIt home">Prove<span>It</span></Link>
-        <nav aria-label="Main navigation">
-          <NavLink to="/post">Post a challenge</NavLink>
-          <NavLink to="/leaderboard">Leaderboard</NavLink>
-          <NavLink to="/feed">Opportunities</NavLink>
-        </nav>
+        <Link to="/" className="logo" aria-label="ProveIt home"><span className="logo-mark"><BadgeIcon size={16} /></span>Prove<span>It</span></Link>
+        {user && <nav aria-label="Main navigation">
+          {getAccountRole(user) === 'startup' ? <>
+            <NavLink to="/startup/dashboard">Dashboard</NavLink>
+            <NavLink to="/post">Post a challenge</NavLink>
+            <NavLink to="/leaderboard">Leaderboard</NavLink>
+          </> : getAccountRole(user) === 'candidate' ? <>
+            <NavLink to="/feed">Opportunities</NavLink>
+            <NavLink to="/leaderboard">Leaderboard</NavLink>
+          </> : null}
+        </nav>}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={user ? 'signed-in' : 'signed-out'}
@@ -46,23 +73,27 @@ export default function App() {
             {user ? <>
               <NavLink to="/profile">Profile</NavLink>
               <button className="btn small ghost" type="button" onClick={signOut}>Log out</button>
-            </> : <NavLink to="/login">Log in</NavLink>}
+            </> : <><NavLink to="/login">Log in</NavLink><NavLink to="/register">Create account</NavLink></>}
           </motion.div>
         </AnimatePresence>
       </header>
       <main className="page">
         {sessionError && <div className="notice" role="status" style={{ marginBottom: 16 }}>{sessionError} Some account data may be stale until the connection returns.</div>}
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/post" element={<Post />} />
-          <Route path="/review/:id" element={<Review />} />
-          <Route path="/dashboard/:id" element={<Dashboard />} />
-          <Route path="/c/:id" element={<Solve />} />
-          <Route path="/result/:sid" element={<Result />} />
+          <Route path="/" element={<LandingRoute />} />
+          <Route path="/post" element={<ProtectedRoute roles={['startup']}><Post /></ProtectedRoute>} />
+          <Route path="/review/:id" element={<ProtectedRoute roles={['startup']}><Review /></ProtectedRoute>} />
+          <Route path="/dashboard/:id" element={<ProtectedRoute roles={['startup']}><Dashboard /></ProtectedRoute>} />
+          <Route path="/startup" element={<ProtectedRoute roles={['startup']}><StartupDashboard /></ProtectedRoute>} />
+          <Route path="/startup/dashboard" element={<ProtectedRoute roles={['startup']}><StartupDashboard /></ProtectedRoute>} />
+          <Route path="/c/:id" element={<ProtectedRoute roles={['candidate']}><Solve /></ProtectedRoute>} />
+          <Route path="/result/:sid" element={<ProtectedRoute roles={['candidate']}><Result /></ProtectedRoute>} />
           <Route path="/badge/:badgeId" element={<BadgePage />} />
-          <Route path="/feed" element={<Feed />} />
+          <Route path="/feed" element={<ProtectedRoute roles={['candidate']}><CandidateDashboard /></ProtectedRoute>} />
+          <Route path="/candidate/dashboard" element={<ProtectedRoute roles={['candidate']}><CandidateDashboard /></ProtectedRoute>} />
           <Route path="/login" element={<Login />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/register" element={<Login initialMode="signup" />} />
+          <Route path="/profile" element={<ProtectedRoute roles={['candidate', 'startup']}><Profile /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="*" element={<div className="card">Page not found.</div>} />
         </Routes>

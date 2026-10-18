@@ -120,8 +120,17 @@ test('seed refuses AI_MOCK-only and remote database configurations', () => {
 test('auth and badge routes keep revoked credentials out of public views', async () => {
   const authSource = await readFile(new URL('../src/routes/auth.js', import.meta.url), 'utf8');
   const leaderboardSource = await readFile(new URL('../src/routes/leaderboard.js', import.meta.url), 'utf8');
+  const middlewareSource = await readFile(new URL('../src/middleware.js', import.meta.url), 'utf8');
+  const challengeSource = await readFile(new URL('../src/routes/challenges.js', import.meta.url), 'utf8');
   assert.match(authSource, /showOnLeaderboard: body\.showOnLeaderboard \?\? false/);
+  assert.match(authSource, /ACCOUNT_ROLES\.includes\(role\)/);
+  assert.match(authSource, /role, passwordHash/);
   assert.match(authSource, /signupByIp\.consume/);
   assert.match(authSource, /failedLoginByIdentity\.isBlocked/);
+  assert.match(middlewareSource, /export function requireRole/);
+  assert.match(middlewareSource, /getAccountRole\(req\.user\.role\) !== 'startup'/);
+  assert.match(middlewareSource, /You do not own this challenge/);
+  assert.match(challengeSource, /router\.post\('\/generate', requireRole\('startup'\)/);
+  assert.match(challengeSource, /ownerUserId: req\.user\._id/);
   assert.match(leaderboardSource, /isPubliclyValidBadge\(submission\)/);
 });

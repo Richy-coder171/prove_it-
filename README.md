@@ -111,18 +111,20 @@ The server waits for a successful MongoDB connection before it starts listening.
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Product landing page |
-| `/post` | Create a job or founder-mode challenge |
-| `/review/:id` | Review and publish a generated challenge |
-| `/dashboard/:id` | Review candidates, shortlist, adjust scores, and endorse |
-| `/c/:id` | Candidate task and timed answer flow |
-| `/result/:sid` | Candidate score, evidence, and next steps |
+| `/` | Public product landing page with authentication entry points |
+| `/login` / `/register` | Authentication; registration requires a candidate or startup role |
+| `/feed` / `/candidate/dashboard` | Candidate opportunities and progress |
+| `/startup/dashboard` | Startup-owned challenge list and posting entry point |
+| `/post` | Startup-only challenge creation |
+| `/review/:id` | Startup-only review and publish flow |
+| `/dashboard/:id` | Startup-only candidate review, shortlist, score adjustment, and endorsement |
+| `/c/:id` | Candidate-only task and timed answer flow |
+| `/result/:sid` | Candidate-only score, evidence, and next steps |
 | `/badge/:badgeId` | Public badge verification page |
-| `/feed` | Public opportunity feed |
 | `/profile` | Authenticated profile, statistics, and attempt history |
-| `/leaderboard` | Opt-in public verified-badge rankings |
+| `/leaderboard` | Public opt-in verified-badge rankings |
 
-The frontend stores a challenge owner key and candidate session in browser local storage so the poster can return to the private review pages and a candidate can resume an attempt in the same browser.
+Candidates and startups use the same authentication/session system, but the server-stored role selects the dashboard and API permissions. Existing users without a role are treated as candidates through the controlled schema default, so they are not locked out or promoted to startup accounts. New challenges also store their owning startup user ID; the existing owner key remains required for owner review routes and is stored in browser local storage alongside candidate sessions.
 
 ## Current implementation status
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Challenge, Submission } from '../models.js';
-import { optionalUser, requireOwner } from '../middleware.js';
+import { optionalUser, requireOwner, requireRole } from '../middleware.js';
+import { getAccountRole } from '../roles.js';
 import { asyncHandler } from '../util.js';
 import { generateChallenge } from '../graders.js';
 import crypto from 'crypto';
@@ -14,6 +15,7 @@ const challengeView = (challenge) => {
   delete value.__v;
   delete value.ownerKey;
   delete value.ownerKeyHash;
+  delete value.ownerUserId;
   return value;
 };
 const weightsTotal = (rubric) => rubric.reduce((sum, criterion) => sum + Number(criterion.weight), 0);
@@ -34,7 +36,7 @@ router.get('/', asyncHandler(async (req, res) => {
   })));
 }));
 
-router.post('/generate', asyncHandler(async (req, res) => {
+router.post('/generate', requireRole('startup'), asyncHandler(async (req, res) => {
   const { mode, text, posterName = '' } = req.body || {};
   if (!['job', 'idea'].includes(mode)) return res.status(400).json({ error: 'Mode must be job or idea' });
   if (typeof text !== 'string' || text.trim().length < 30) return res.status(400).json({ error: 'Please provide at least 30 characters of source text' });
@@ -46,8 +48,31 @@ router.post('/generate', asyncHandler(async (req, res) => {
     return res.status(502).json({ error: error.message || 'Could not generate a challenge' });
   }
   const ownerKey = crypto.randomBytes(32).toString('hex');
-  const challenge = await Challenge.create({ mode, posterName: posterName.trim(), sourceText: text.trim(), ...draft, status: 'draft', ownerKeyHash: hashSecret(ownerKey) });
+  const challenge = await Challenge.create({ mode, posterName: posterName.trim(), sourceText: text.trim(), ...draft, status: 'draft', ownerUserId: req.user._id, ownerKeyHash: hashSecret(ownerKey) });
   res.status(201).json({ challenge: challengeView(challenge), ownerKey });
+}));
+
+router.get('/mine', requireRole('startup'), asyncHandler(async (req, res) => {
+  const challenges = await Challenge.find({ ownerUserId: req.user._id })
+    .sort({ createdAt: -1 })
+    .select('title mode skill level timeLimitMin status createdAt')
+    .lean();
+  const counts = await Submission.aggregate([
+    { $match: { challengeId: { $in: challenges.map((challenge) => challenge._id) } } },
+    { $group: { _id: '$challengeId', count: { $sum: 1 } } },
+  ]);
+  const countByChallenge = new Map(counts.map((row) => [String(row._id), row.count]));
+  res.json(challenges.map((challenge) => ({
+    id: String(challenge._id),
+    title: challenge.title,
+    mode: challenge.mode,
+    skill: challenge.skill,
+    level: challenge.level,
+    timeLimitMin: challenge.timeLimitMin,
+    status: challenge.status,
+    createdAt: challenge.createdAt,
+    submissionCount: countByChallenge.get(String(challenge._id)) || 0,
+  })));
 }));
 
 router.get('/:id/owner', requireOwner, (req, res) => res.json(challengeView(req.challenge)));
@@ -114,6 +139,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:id/start', optionalUser, asyncHandler(async (req, res) => {
+  if (req.user && getAccountRole(req.user.role) !== 'candidate') return res.status(403).json({ error: 'Candidate account required' });
   const challenge = await Challenge.findById(req.params.id).catch(() => null);
   if (!challenge || challenge.status !== 'live') return res.status(404).json({ error: 'Challenge not found or not published' });
   const { retry = false } = req.body || {};

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
 import { motion, useReducedMotion } from 'framer-motion';
+import { BadgeIcon, BriefcaseIcon, ChallengeIcon } from '../components/DomainVisuals.jsx';
 
 export default function Feed() {
   useEffect(() => {
@@ -33,6 +34,10 @@ export default function Feed() {
               transition={{ duration: reduceMotion ? 0 : 0.28, delay: reduceMotion ? 0 : Math.min(index * 0.055, 0.33), ease: 'easeOut' }}
               whileHover={reduceMotion ? undefined : { y: -3 }}
             >
+              <div className="opportunity-card__visual">
+                <span className="opportunity-card__icon">{founderMode ? <ChallengeIcon size={25} /> : <BriefcaseIcon size={25} />}</span>
+                <span className="opportunity-card__spark"><BadgeIcon size={19} /></span>
+              </div>
               <div className="row">
                 <span className="pill info">{founderMode ? 'Founder Mode' : 'Hiring'}</span>
                 <span className="pill">{challenge.level}</span>
