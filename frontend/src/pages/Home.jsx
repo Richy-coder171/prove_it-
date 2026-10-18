@@ -1,5 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
+
+const audiences = [
+  ['Entrepreneurs', 'Test ideas and find co-founders who can actually deliver.'],
+  ['Job seekers', 'Prove skill without pedigree and build a portable profile.'],
+  ['Startups and recruiters', 'A pre-ranked, explainable shortlist instead of a pile of resumes.'],
+  ['Mentors', 'Review only the top few and endorse the best.'],
+];
+const responsibleCopy = 'AI recommends, humans decide. Only the content of answers is scored, never face, accent or demographics. Candidates see their full breakdown and can request a human re-review.';
+const responsibleWords = responsibleCopy.split(' ');
 
 const examples = {
   job: {
@@ -19,7 +32,7 @@ const examples = {
 function ProofReceipt({ mode, onModeChange }) {
   const example = examples[mode];
   return (
-    <div className="home__receipt" data-ui aria-label="Interactive challenge preview">
+    <div className="home__receipt">
       <div className="home__receipt-top">
         <span>Challenge preview</span>
         <span className="home__receipt-status">Draft</span>
@@ -46,7 +59,7 @@ function ProofReceipt({ mode, onModeChange }) {
 
 function StageInterface({ stage }) {
   if (stage === 'solve') return (
-    <div className="home__mini-ui" data-ui>
+    <div className="home__mini-ui">
       <span className="home__ui-label">Candidate task</span>
       <strong>Junior Data Analyst</strong>
       <p>Review a weekly sales report. Find one trend and explain how you would validate it.</p>
@@ -54,7 +67,7 @@ function StageInterface({ stage }) {
     </div>
   );
   if (stage === 'defend') return (
-    <div className="home__mini-ui" data-ui>
+    <div className="home__mini-ui">
       <span className="home__ui-label">Question about your answer</span>
       <strong>What evidence supports that trend?</strong>
       <p className="home__ui-answer">“I’d compare the same pattern across another time window.”</p>
@@ -62,7 +75,7 @@ function StageInterface({ stage }) {
     </div>
   );
   if (stage === 'score') return (
-    <div className="home__mini-ui" data-ui>
+    <div className="home__mini-ui">
       <span className="home__ui-label">Example rubric score</span>
       <div className="home__score-row"><strong>Data reasoning</strong><strong>26 / 30</strong></div>
       <p className="home__ui-answer">“Compare the same pattern across another time window.”</p>
@@ -70,7 +83,7 @@ function StageInterface({ stage }) {
     </div>
   );
   return (
-    <div className="home__mini-ui home__mini-badge" data-ui>
+    <div className="home__mini-ui">
       <span className="home__ui-label">Badge format preview</span>
       <strong>Data analysis</strong>
       <div className="home__badge-number">86<span> / 100</span></div>
@@ -84,33 +97,55 @@ export default function Home() {
     document.title = 'ProveIt - Prove it. Defend it.';
   }, []);
   const [mode, setMode] = useState('job');
+  const [audienceIndex, setAudienceIndex] = useState(0);
   const homeRef = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = homeRef.current;
-    if (!root || !('IntersectionObserver' in window)) return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-in');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.1 });
-    root.querySelectorAll('[data-reveal]').forEach((element) => observer.observe(element));
-    root.classList.add('motion-ready');
-    return () => {
-      observer.disconnect();
-    };
+    if (!root) return undefined;
+    const media = gsap.matchMedia(root);
+    media.add({
+      reduce: '(prefers-reduced-motion: reduce)',
+      desktop: '(min-width: 901px) and (prefers-reduced-motion: no-preference)',
+      mobile: '(max-width: 900px) and (prefers-reduced-motion: no-preference)',
+    }, (context) => {
+      const { reduce, desktop } = context.conditions;
+      if (reduce) return undefined;
+      const words = gsap.utils.toArray('[data-scrub-word]', root);
+      if (words.length) {
+        gsap.fromTo(words, { opacity: 0.18 }, {
+          opacity: 1,
+          stagger: 0.06,
+          ease: 'none',
+          scrollTrigger: { trigger: '.home__responsible', start: 'top 72%', end: 'center 42%', scrub: true },
+        });
+      }
+      if (desktop) {
+        ScrollTrigger.create({
+          trigger: '.home__process',
+          start: 'top top+=88',
+          end: 'bottom bottom',
+          pin: '.home__process-aside',
+          pinSpacing: false,
+          invalidateOnRefresh: true,
+        });
+      }
+      return undefined;
+    });
+    return () => media.revert();
   }, []);
+
+  function moveAudience(direction) {
+    setAudienceIndex((index) => (index + direction + audiences.length) % audiences.length);
+  }
 
   return (
     <div className="home" ref={homeRef}>
       <section className="home__hero">
         <div className="home__hero-copy">
-          <h1 data-reveal>Show the work.<br />Defend it.</h1>
-          <p data-reveal>Anyone can get an AI to write an answer. ProveIt finds the people who can defend it.</p>
-          <div className="home__actions" data-reveal>
+          <h1><span>Show the work <span className="home__headline-art" aria-hidden="true"><svg viewBox="0 0 72 38"><path d="M5 29 20 19l12 5 14-14 20 7" /><circle cx="46" cy="10" r="3" /></svg></span></span><span>Defend it.</span></h1>
+          <p>Anyone can get an AI to write an answer. ProveIt finds the people who can defend it.</p>
+          <div className="home__actions">
             <Link className="home__button" to="/post">Post a challenge</Link>
             <Link className="home__text-link" to="/feed">See opportunities</Link>
           </div>
@@ -120,44 +155,59 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home__process" aria-label="How ProveIt works">
-        {[
+      <div className="home__marquee" role="img" aria-label="Platform flow: task, defence, evidence, human review, verified badge">
+        <div className="home__marquee-track" aria-hidden="true">
+          {[0, 1].map((copy) => <div className="home__marquee-run" key={copy}>{['Task', 'Defend', 'Evidence', 'Human review', 'Verified badge'].map((label) => <span key={`${copy}-${label}`}>{label}<i /></span>)}</div>)}
+        </div>
+      </div>
+
+      <section className="home__process" id="how-it-works" aria-label="How ProveIt works">
+        <div className="home__process-aside">
+          <span className="home__eyebrow">A clearer way to hire</span>
+          <h2>From task<br />to badge.</h2>
+          <p>See how a real piece of work becomes a result candidates can explain and teams can verify.</p>
+        </div>
+        <div className="home__process-grid">
+          {[
           { id: 'solve', title: 'Solve', copy: "A timed, real-world micro-task from the startup's actual work." },
           { id: 'defend', title: 'Defend', copy: 'AI asks 2-3 questions about YOUR answer. You reply by voice.' },
           { id: 'score', title: 'Evidence', copy: 'A rubric ties every score to words from your answer.' },
           { id: 'badge', title: 'Get verified', copy: 'A signed badge anyone can check with a link or QR code.' },
-        ].map((item, index) => (
-          <article className={`home__stage home__stage--${index + 1}`} key={item.id}>
-            {index === 0 && <h2>From task to badge</h2>}
-            <div className="home__stage-ui" data-reveal><StageInterface stage={item.id} /></div>
-            <div className="home__stage-copy" data-reveal>
-              <h3>{item.title}</h3>
-              <p>{item.copy}</p>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="home__audience" aria-label="Who ProveIt serves">
-        {[
-          ['Entrepreneurs', 'Test ideas and find co-founders who can actually deliver.'],
-          ['Job seekers', 'Prove skill without pedigree and build a portable profile.'],
-          ['Startups and recruiters', 'A pre-ranked, explainable shortlist instead of a pile of resumes.'],
-          ['Mentors', 'Review only the top few and endorse the best.'],
-        ].map(([title, copy]) => (
-          <article className="home__audience-row" data-reveal key={title}>
-            <h2>{title}</h2><p>{copy}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="home__responsible">
-        <div className="home__responsible-copy" data-reveal>
-          <h2>Responsible AI</h2>
-          <p>AI recommends, humans decide. Only the content of answers is scored, never face, accent or demographics. Candidates see their full breakdown and can request a human re-review.</p>
+          ].map((item, index) => (
+            <article className={`home__stage home__stage--${index + 1}`} key={item.id}>
+              <div className="home__stage-heading"><h3>{item.title}</h3><span>{item.copy}</span></div>
+              <div className="home__stage-ui"><StageInterface stage={item.id} /></div>
+            </article>
+          ))}
         </div>
-        <div className="home__responsible-ui" data-reveal>
-          <div className="home__review-ui" data-ui>
+      </section>
+
+      <section className="home__audience" id="audiences" aria-label="Who ProveIt serves">
+        <div className="home__audience-heading">
+          <span className="home__eyebrow">Built for real work</span>
+          <h2>One proof format.<br />Different goals.</h2>
+          <div className="home__carousel-controls">
+            <button type="button" aria-label="Previous audience" onClick={() => moveAudience(-1)}>←</button>
+            <span aria-live="polite">{String(audienceIndex + 1).padStart(2, '0')} / {String(audiences.length).padStart(2, '0')}</span>
+            <button type="button" aria-label="Next audience" onClick={() => moveAudience(1)}>→</button>
+          </div>
+        </div>
+        <div className="home__audience-detail" aria-live="polite">
+          <span className="home__eyebrow">For {audiences[audienceIndex][0]}</span>
+          <p>{audiences[audienceIndex][1]}</p>
+          <div className="home__audience-tabs" role="group" aria-label="Choose an audience">
+            {audiences.map(([title], index) => <button type="button" aria-pressed={audienceIndex === index} key={title} onClick={() => setAudienceIndex(index)}>{title}</button>)}
+          </div>
+        </div>
+      </section>
+
+      <section className="home__responsible" id="responsible-ai">
+        <div className="home__responsible-copy">
+          <h2>Responsible AI</h2>
+          <p aria-label={responsibleCopy}>{responsibleWords.map((word, index) => <span data-scrub-word aria-hidden="true" key={`${word}-${index}`}>{word}{index < responsibleWords.length - 1 ? ' ' : ''}</span>)}</p>
+        </div>
+        <div className="home__responsible-ui">
+          <div className="home__review-ui">
             <span className="home__ui-label">Example evidence you can inspect</span>
             <strong>Reasoning and trade-offs</strong>
             <p>Evidence from the candidate’s answer</p>
@@ -167,8 +217,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home__close">
-        <div className="home__close-copy" data-reveal>
+      <section className="home__close" id="create-challenge">
+        <div className="home__close-copy">
           <h2>Make proof<br />the starting point.</h2>
           <p>Post a challenge for a job or an idea, or find an open opportunity to solve.</p>
           <div className="home__actions">
@@ -176,8 +226,8 @@ export default function Home() {
             <Link className="home__text-link home__text-link--dark" to="/feed">See opportunities</Link>
           </div>
         </div>
-        <div className="home__close-ui" data-reveal>
-          <div className="home__create-ui" data-ui>
+        <div className="home__close-ui">
+          <div className="home__create-ui">
             <span className="home__ui-label">First, choose what you’re building</span>
             <h3>Create a challenge</h3>
             <div className="home__create-choices" aria-label="Challenge type examples">
@@ -188,7 +238,7 @@ export default function Home() {
             <Link className="home__button home__button--dark" to="/post">Start a challenge</Link>
           </div>
         </div>
-        <footer className="home__footer"><span>ProveIt</span></footer>
+        <footer className="home__footer"><span>ProveIt</span><nav aria-label="Footer"><Link to="/feed">Open challenges</Link><Link to="/post">Create a challenge</Link></nav><span>Proof before pedigree.</span></footer>
       </section>
     </div>
   );

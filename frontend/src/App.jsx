@@ -12,8 +12,8 @@ export default function App() {
   return (
     <>
       <header className="nav">
-        <Link to="/" className="logo">Prove<span>It</span></Link>
-        <nav>
+        <Link to="/" className="logo" aria-label="ProveIt home">Prove<span>It</span></Link>
+        <nav aria-label="Main navigation">
           <NavLink to="/post">Post a challenge</NavLink>
           <NavLink to="/feed">Opportunities</NavLink>
         </nav>
