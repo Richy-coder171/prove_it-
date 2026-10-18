@@ -3,11 +3,17 @@ import crypto from 'crypto';
 import { Challenge, Submission, User } from '../models.js';
 import { requireUser } from '../middleware.js';
 import { asyncHandler, hashPassword, hashSecret, verifyPassword } from '../util.js';
+import { isPubliclyValidBadge } from '../badge-state.js';
+import { createFixedWindowLimiter } from '../rate-limit.js';
 
 const router = Router();
-const failedLogins = new Map();
 const windowMs = 15 * 60 * 1000;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const failedLoginByIdentity = createFixedWindowLimiter({ windowMs, maxAttempts: 5, maxEntries: 10000 });
+const failedLoginByIp = createFixedWindowLimiter({ windowMs, maxAttempts: 25, maxEntries: 5000 });
+const signupByIp = createFixedWindowLimiter({ windowMs, maxAttempts: 10, maxEntries: 5000 });
+
+const requestIp = (req) => String(req.ip || req.socket?.remoteAddress || 'unknown');
 
 function userView(user) {
   return {
@@ -34,6 +40,7 @@ function addSession(user) {
 }
 
 router.post('/signup', asyncHandler(async (req, res) => {
+  if (!signupByIp.consume(requestIp(req))) return res.status(429).json({ error: 'Too many account creation attempts. Try again in a few minutes.' });
   const body = req.body || {};
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -42,14 +49,14 @@ router.post('/signup', asyncHandler(async (req, res) => {
   if (!emailPattern.test(email)) return res.status(400).json({ error: 'Please provide a valid email address' });
   if (typeof password !== 'string' || password.length < 8 || password.length > 128) return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
   if (body.showOnLeaderboard !== undefined && typeof body.showOnLeaderboard !== 'boolean') return res.status(400).json({ error: 'showOnLeaderboard must be a boolean' });
-  if (await User.exists({ email })) return res.status(409).json({ error: 'An account with this email already exists' });
+  if (await User.exists({ email })) return res.status(409).json({ error: 'Unable to create an account with these details' });
 
-  const user = new User({ name, email, passwordHash: hashPassword(password), showOnLeaderboard: body.showOnLeaderboard ?? true });
+  const user = new User({ name, email, passwordHash: hashPassword(password), showOnLeaderboard: body.showOnLeaderboard ?? false });
   const token = addSession(user);
   try {
     await user.save();
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ error: 'An account with this email already exists' });
+    if (error.code === 11000) return res.status(409).json({ error: 'Unable to create an account with these details' });
     throw error;
   }
   res.status(201).json({ token, user: userView(user) });
@@ -58,23 +65,21 @@ router.post('/signup', asyncHandler(async (req, res) => {
 router.post('/login', asyncHandler(async (req, res) => {
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const password = req.body?.password;
-  const key = `${req.ip}|${email}`;
-  const now = Date.now();
-  for (const [entry, attempt] of failedLogins) if (now - attempt.firstAt >= windowMs) failedLogins.delete(entry);
-  const attempts = failedLogins.get(key);
-  if (attempts && now - attempts.firstAt < windowMs && attempts.count >= 5) {
+  const ip = requestIp(req);
+  const key = `${ip}|${email}`;
+  if (failedLoginByIdentity.isBlocked(key) || failedLoginByIp.isBlocked(ip)) {
     return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
   }
 
   const user = emailPattern.test(email) ? await User.findOne({ email }).select('+passwordHash +sessions') : null;
   if (!user || !verifyPassword(password, user.passwordHash)) {
-    const current = failedLogins.get(key);
-    if (!current || now - current.firstAt >= windowMs) failedLogins.set(key, { count: 1, firstAt: now });
-    else current.count += 1;
+    failedLoginByIdentity.record(key);
+    failedLoginByIp.record(ip);
     return res.status(401).json({ error: 'Incorrect email or password' });
   }
 
-  failedLogins.delete(key);
+  failedLoginByIdentity.reset(key);
+  failedLoginByIp.reset(ip);
   const token = addSession(user);
   await user.save();
   res.json({ token, user: userView(user) });
@@ -93,6 +98,7 @@ router.get('/me', requireUser, asyncHandler(async (req, res) => {
   const challengeById = new Map(challenges.map((challenge) => [String(challenge._id), challenge]));
   const attempts = submissions.map((submission) => {
     const challenge = challengeById.get(String(submission.challengeId));
+    const publiclyValidBadge = isPubliclyValidBadge(submission);
     return {
       submissionId: String(submission._id),
       challengeId: String(submission.challengeId),
@@ -100,11 +106,11 @@ router.get('/me', requireUser, asyncHandler(async (req, res) => {
       skill: challenge?.skill || '',
       status: submission.status,
       total: submission.score?.total ?? null,
-      level: submission.badge?.level || null,
-      badgeId: submission.badgeId || null,
+      level: publiclyValidBadge ? submission.badge?.level || null : null,
+      badgeId: publiclyValidBadge ? submission.badgeId : null,
       authenticity: submission.score?.authenticity?.level || null,
-      issuedAt: submission.badge?.issuedAt || null,
-      mentor: submission.badge?.mentor?.name || null,
+      issuedAt: publiclyValidBadge ? submission.badge?.issuedAt || null : null,
+      mentor: publiclyValidBadge ? submission.badge?.mentor?.name || null : null,
       startedAt: submission.startedAt,
     };
   });

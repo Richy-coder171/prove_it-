@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Submission, User } from '../models.js';
 import { asyncHandler } from '../util.js';
+import { isPubliclyValidBadge } from '../badge-state.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.get('/', asyncHandler(async (req, res) => {
   for (const submission of submissions) {
     const userId = String(submission.userId);
     const user = userById.get(userId);
-    if (!user || !submission.badge) continue;
+    if (!user || !isPubliclyValidBadge(submission)) continue;
     const badge = submission.badge;
     const skill = badge.skill || '';
     const key = `${userId}\u0000${skill}`;

@@ -3,10 +3,14 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Challenge, Submission, User } from '../src/models.js';
 import { generateChallenge, gradeSubmission } from '../src/graders.js';
-import { hashPassword, hashSecret, signBadge } from '../src/util.js';
+import { hashPassword, hashSecret } from '../src/util.js';
+import { syncBadgeState } from '../src/badge-state.js';
+import { assertSeedSafety } from '../src/seed-safety.js';
 
-if (process.env.AI_MOCK !== '1') {
-  console.error('Run with AI_MOCK=1 so seeding does not use your AI quota');
+try {
+  assertSeedSafety();
+} catch (error) {
+  console.error(`Seed refused: ${error.message}`);
   process.exit(1);
 }
 
@@ -63,23 +67,6 @@ const candidates = [
   },
 ];
 
-function makeBadge(submission, challenge) {
-  const badge = {
-    badgeId: `PI-${crypto.randomBytes(2).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
-    name: submission.name,
-    skill: challenge.skill,
-    level: submission.score.total >= 85 ? 'Advanced' : 'Intermediate',
-    total: submission.score.total,
-    issuedAt: new Date().toISOString(),
-    authenticity: submission.score.authenticity?.level || null,
-    mentor: submission.mentor?.name ? { name: submission.mentor.name, note: submission.mentor.note || '' } : null,
-    challengeTitle: challenge.title,
-    criteria: submission.score.criteria.map(({ name, weight, points, why }) => ({ name, weight, points, why })),
-  };
-  badge.signature = signBadge(badge);
-  return badge;
-}
-
 try {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/proveit');
   const generated = await generateChallenge({ mode: 'job', text });
@@ -130,10 +117,7 @@ try {
       badgeBreakdownPublic: false,
     });
     submission.score = await gradeSubmission(challenge, answer, qa);
-    if (submission.score.total >= 70) {
-      submission.badge = makeBadge(submission, challenge);
-      submission.badgeId = submission.badge.badgeId;
-    }
+    syncBadgeState(submission, challenge, { reason: 'seed_demo' });
     submissions.push(submission);
   }
 
@@ -152,11 +136,11 @@ try {
     console.log(`${submission.name}: ${submission.score.total} — ${submission.badgeId || 'no badge'}`);
   }
   console.log(`Challenge ID: ${challenge.id}`);
-  console.log(`Owner key: ${ownerKey}`);
+  console.log(`Owner key (development-only): ${ownerKey}`);
   console.log(`Candidate link: /c/${challenge.id}`);
   console.log(`Dashboard path: /dashboard/${challenge.id}`);
   console.log(`Paste this once in the frontend browser console: localStorage.setItem("pi_owner_${challenge.id}", JSON.stringify("${ownerKey}"))`);
-  console.log('Demo candidate login: aarav.sharma@example.com / demo12345');
+  console.log('Demo credentials (development-only): aarav.sharma@example.com / demo12345');
 } catch (error) {
   console.error(error.message || error);
   process.exitCode = 1;

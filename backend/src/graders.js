@@ -167,9 +167,26 @@ const evidenceFor = (criterion, answer) => {
   return answerSentences(answer).find((sentence) => keys.some((word) => sentence.toLowerCase().includes(word))) || '';
 };
 
-function mockGrade({ challenge, candidateAnswer, defendTranscript, runIndex = 0 }) {
+export function extractDefenseAnswers(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (typeof item === 'string') return item.trim();
+      if (item && typeof item === 'object') return String(item.a ?? item.answer ?? '').trim();
+      return '';
+    }).filter(Boolean);
+  }
+  if (typeof value !== 'string') return [];
+  const answerBlocks = [...value.matchAll(/(?:^|\n)Answer:\s*([\s\S]*?)(?=\n(?:Question:|$))/gi)]
+    .map((match) => match[1].trim()).filter(Boolean);
+  if (answerBlocks.length) return answerBlocks;
+  return value.split(/\n+/).map((line) => line.replace(/^Question:\s*/i, '').trim()).filter(Boolean);
+}
+
+function mockGrade({ challenge, candidateAnswer, defendAnswers = [], defendTranscript = '', runIndex = 0 }) {
   const answer = candidateAnswer.toLowerCase();
-  const defense = defendTranscript.toLowerCase();
+  // Only candidate answers participate in consistency. Follow-up question
+  // wording is context, not evidence about the candidate.
+  const defense = extractDefenseAnswers(defendAnswers.length ? defendAnswers : defendTranscript).join(' ').toLowerCase();
   const challengeTerms = `${challenge.skill} ${challenge.task}`.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
   const taskFit = challengeTerms.some((term) => answer.includes(term));
   const action = has(answer, /\b(would|will|first|build|create|test|compare|measure|check|analy[sz]e|interview|launch|track|validate|calculate|clean|query|design|review|pilot)\b/);
@@ -218,17 +235,39 @@ function mockGrade({ challenge, candidateAnswer, defendTranscript, runIndex = 0 
   };
 }
 
-function validateGrade(raw, challenge, answer) {
+function explanationFor(result, rubric, evidence) {
+  const candidate = normalizeEvidenceWhitespace(result?.why ?? result?.explanation ?? '');
+  if (candidate.length >= 20 && candidate.length <= 600) {
+    const terms = `${rubric.name} ${rubric.description}`.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
+    const mentionsCriterion = terms.some((term) => candidate.toLowerCase().includes(term));
+    const mentionsEvidence = evidence.some((quote) => quote.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4).some((word) => candidate.toLowerCase().includes(word)));
+    if (mentionsCriterion || mentionsEvidence) return candidate;
+  }
+  if (evidence.length) return `The response includes an exact statement relevant to ${rubric.name.toLowerCase()}, but the model explanation was not specific enough to retain.`;
+  return `Unsupported model explanation: no exact submitted-text reference was accepted for ${rubric.name.toLowerCase()}.`;
+}
+
+function safeAuthenticityReasons(signal) {
+  return (Array.isArray(signal?.reasons) ? signal.reasons : []).map(String).map((reason) => (
+    /cheat|fraud|plagiar|guilt|proof of misconduct/i.test(reason)
+      ? 'Low alignment is not proof of misconduct; the spoken answers shared limited verifiable details with the written response.'
+      : reason.slice(0, 500)
+  )).filter(Boolean).slice(0, 5);
+}
+
+export function validateGrade(raw, challenge, answer) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.criteria) || !raw.criteria.length) throw new Error('AI returned an invalid grade');
   const source = Array.isArray(raw?.criteria) ? raw.criteria : [];
   const criteria = challenge.rubric.map((rubric, index) => {
-    const result = source.find((item) => item.name === rubric.name) || source[index] || {};
+    const result = source.find((item) => item && item.name === rubric.name) || source[index] || {};
+    const safeResult = result && typeof result === 'object' ? result : {};
     const max = Number(rubric.weight);
-    let points = Number(result.score ?? result.points);
-    if (!Number.isFinite(points) && Number.isFinite(Number(result.percent))) points = max * Number(result.percent) / 100;
+    let points = Number(safeResult.score ?? safeResult.points);
+    if (!Number.isFinite(points) && Number.isFinite(Number(safeResult.percent))) points = max * Number(safeResult.percent) / 100;
     points = clamp(Number.isFinite(points) ? points : 0, 0, max);
     const percent = max ? points / max * 100 : 0;
     const criterionTerms = `${rubric.name} ${rubric.description}`.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
-    const evidence = (Array.isArray(result.evidence) ? result.evidence : []).map(String)
+    const evidence = (Array.isArray(safeResult.evidence) ? safeResult.evidence : []).map(String)
       .filter((quote) => evidencePresent(quote, answer) && criterionTerms.some((word) => normalizeEvidenceWhitespace(quote).toLowerCase().includes(word)))
       .slice(0, 2).map(normalizeEvidenceWhitespace);
     return {
@@ -236,12 +275,12 @@ function validateGrade(raw, challenge, answer) {
       points: Math.round(points * 100) / 100,
       percent: Math.round(percent * 100) / 100,
       evidence,
-      why: evidence.length ? `The response includes an exact statement relevant to ${rubric.name.toLowerCase()}; consider adding a measurable check to make the support clearer.` : `The response did not provide an exact, verifiable statement supporting ${rubric.name.toLowerCase()}.`,
+      why: explanationFor(safeResult, rubric, evidence),
       overridden: false,
       aiPoints: Math.round(points * 100) / 100,
     };
   });
-  const signal = raw.authenticity_signal || raw.authenticity || {};
+  const signal = raw?.authenticity_signal || raw?.authenticity || {};
   const rawLevel = String(signal.level || signal.key || 'medium').toLowerCase();
   const key = rawLevel.includes('high') ? 'high' : rawLevel.includes('low') ? 'low' : 'medium';
   return {
@@ -250,16 +289,17 @@ function validateGrade(raw, challenge, answer) {
     authenticity: {
       key,
       level: key[0].toUpperCase() + key.slice(1) + ' confidence',
-      reasons: Array.isArray(signal.reasons) ? signal.reasons.map(String).slice(0, 5) : [],
+      reasons: safeAuthenticityReasons(signal),
     },
     graderConfidence: clamp(Number(raw.grader_confidence) || 0.5, 0, 1),
   };
 }
 
-export function gradeOnce({ challenge, candidateAnswer, defendTranscript, runIndex = 0 }) {
-  const input = { challenge: { title: challenge.title, skill: challenge.skill, rubric: challenge.rubric }, rubric: challenge.rubric, candidateAnswer, defendTranscript, runIndex };
+export function gradeOnce({ challenge, candidateAnswer, defendTranscript, defendAnswers: suppliedDefenseAnswers, runIndex = 0 }) {
+  const defendAnswers = extractDefenseAnswers(suppliedDefenseAnswers ?? defendTranscript);
+  const input = { challenge: { title: challenge.title, skill: challenge.skill, rubric: challenge.rubric }, rubric: challenge.rubric, candidateAnswer, defendAnswers, runIndex };
   return structuredAI({
-    system: 'Grade the candidate answer against the supplied rubric. Never reward length by itself. Cite only exact evidence actually present in the candidate answer; never invent quotes. Consider the defend transcript for reasoning and consistency, not accent or demographics. Return ONLY JSON with total (0-100), criteria [{name, weight, score (points out of weight), max, evidence (exact quotes from candidateAnswer), why}], authenticity_signal {level: low|medium|high, reasons: string[]}, grader_confidence (0-1). No markdown or prose.',
+    system: 'Grade the candidate answer against the supplied rubric. Never reward length by itself. Cite only exact evidence actually present in candidateAnswer; never invent quotes. Use defenseAnswers (answers only, never follow-up question wording) for reasoning and consistency, not accent or demographics. A low consistency signal is not proof of cheating or misconduct. Return ONLY JSON with total (0-100), criteria [{name, weight, score (points out of weight), max, evidence (exact quotes from candidateAnswer), why}], authenticity_signal {level: low|medium|high, reasons: string[]}, grader_confidence (0-1). No markdown or prose.',
     user: JSON.stringify(input),
     mock: () => mockGrade({ ...input, runIndex }),
     validate: (raw) => validateGrade(raw, challenge, candidateAnswer),
@@ -268,8 +308,8 @@ export function gradeOnce({ challenge, candidateAnswer, defendTranscript, runInd
 
 export async function gradeSubmission(challenge, candidateAnswer, qa) {
   const runs = clamp(Math.floor(Number(process.env.GRADE_RUNS) || 3), 1, 5);
-  const defendTranscript = (qa || []).map(({ q, a }) => `Question: ${q}\nAnswer: ${a}`).join('\n\n');
-  const grades = await Promise.all(Array.from({ length: runs }, (_, runIndex) => gradeOnce({ challenge, candidateAnswer, defendTranscript, runIndex })));
+  const defendAnswers = extractDefenseAnswers(qa);
+  const grades = await Promise.all(Array.from({ length: runs }, (_, runIndex) => gradeOnce({ challenge, candidateAnswer, defendAnswers, runIndex })));
   const criteria = challenge.rubric.map((rubric) => {
     const points = grades.reduce((sum, grade) => sum + (grade.criteria.find((item) => item.name === rubric.name)?.points || 0), 0) / grades.length;
     const first = grades[0].criteria.find((item) => item.name === rubric.name);
