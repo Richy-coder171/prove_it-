@@ -11,10 +11,12 @@ import Login from './pages/Login.jsx';
 import Profile from './pages/Profile.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
 import { useAuth } from './lib/auth.jsx';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 export default function App() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   async function signOut() {
     await logout();
@@ -30,12 +32,21 @@ export default function App() {
           <NavLink to="/leaderboard">Leaderboard</NavLink>
           <NavLink to="/feed">Opportunities</NavLink>
         </nav>
-        <div className="row nav-account">
-          {user ? <>
-            <NavLink to="/profile">Profile</NavLink>
-            <button className="btn small ghost" type="button" onClick={signOut}>Log out</button>
-          </> : <NavLink to="/login">Log in</NavLink>}
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={user ? 'signed-in' : 'signed-out'}
+            className="row nav-account"
+            initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+            transition={{ duration: reduceMotion ? 0 : 0.18 }}
+          >
+            {user ? <>
+              <NavLink to="/profile">Profile</NavLink>
+              <button className="btn small ghost" type="button" onClick={signOut}>Log out</button>
+            </> : <NavLink to="/login">Log in</NavLink>}
+          </motion.div>
+        </AnimatePresence>
       </header>
       <main className="page">
         <Routes>

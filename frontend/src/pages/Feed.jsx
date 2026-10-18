@@ -2,12 +2,14 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAsync } from '../lib/hooks.js';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export default function Feed() {
   useEffect(() => {
     document.title = 'ProveIt - Open challenges';
   }, []);
   const { data: challenges, loading, error } = useAsync(() => api.listLive(), []);
+  const reduceMotion = useReducedMotion();
 
   if (loading) return <div className="card center"><span className="spinner" /></div>;
   if (error) return <div className="card"><div className="error" role="alert">{error}</div></div>;
@@ -23,7 +25,14 @@ export default function Feed() {
         {challenges.map((challenge) => {
           const founderMode = challenge.mode === 'idea';
           return (
-            <article className="card stack" key={challenge.id}>
+            <motion.article
+              className="card stack"
+              key={challenge.id}
+              initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.28, delay: reduceMotion ? 0 : Math.min(index * 0.055, 0.33), ease: 'easeOut' }}
+              whileHover={reduceMotion ? undefined : { y: -3 }}
+            >
               <div className="row">
                 <span className="pill info">{founderMode ? 'Founder Mode' : 'Hiring'}</span>
                 <span className="pill">{challenge.level}</span>
@@ -34,7 +43,7 @@ export default function Feed() {
               </div>
               <p className="muted small">{challenge.timeLimitMin} minute challenge</p>
               <div><Link className="btn primary" to={`/c/${challenge.id}`}>Solve this challenge</Link></div>
-            </article>
+            </motion.article>
           );
         })}
       </div>

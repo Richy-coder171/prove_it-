@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 export default function Login() {
   const { user, login, signup } = useAuth();
+  const reduceMotion = useReducedMotion();
   const location = useLocation();
   const navigate = useNavigate();
   const [mode, setMode] = useState('login');
@@ -41,36 +43,52 @@ export default function Login() {
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto' }}>
-      <section className="card stack">
+      <motion.section
+        className="card stack"
+        initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.3, ease: 'easeOut' }}
+      >
         <div className="row">
-          <button className={`btn ${mode === 'login' ? 'primary' : 'ghost'}`} type="button" aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(''); }}>Log in</button>
-          <button className={`btn ${mode === 'signup' ? 'primary' : 'ghost'}`} type="button" aria-pressed={mode === 'signup'} onClick={() => { setMode('signup'); setError(''); }}>Sign up</button>
+          <button className={`btn ${mode === 'login' ? 'primary' : 'ghost'}`} type="button" disabled={busy} aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(''); }}>Log in</button>
+          <button className={`btn ${mode === 'signup' ? 'primary' : 'ghost'}`} type="button" disabled={busy} aria-pressed={mode === 'signup'} onClick={() => { setMode('signup'); setError(''); }}>Sign up</button>
         </div>
         <div>
           <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
           <p className="muted">{mode === 'login' ? 'Sign in to keep your verified work together.' : 'Build a profile for your challenge attempts and verified badges.'}</p>
         </div>
         <form className="stack" onSubmit={submit} noValidate>
-          {mode === 'signup' && <div><label htmlFor="auth-name">Name</label><input id="auth-name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} /></div>}
-          <div><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
-          <div>
-            <label htmlFor="auth-password">Password</label>
-            <input id="auth-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
-            {mode === 'signup' && <div className="muted small">At least 8 characters</div>}
-          </div>
-          {mode === 'signup' && <div>
-            <label className="row small" htmlFor="auth-leaderboard" style={{ alignItems: 'flex-start' }}>
-              <input id="auth-leaderboard" type="checkbox" checked={showOnLeaderboard} onChange={(event) => setShowOnLeaderboard(event.target.checked)} style={{ width: 'auto', minHeight: 0, marginTop: 4 }} />
-              <span>Show my verified badges on the public leaderboard</span>
-            </label>
-            <div className="muted small">You can change this any time in your profile.</div>
-          </div>}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={mode}
+              className="stack"
+              initial={reduceMotion ? false : { opacity: 0, y: 7 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -5 }}
+              transition={{ duration: reduceMotion ? 0 : 0.16, ease: 'easeOut' }}
+            >
+              {mode === 'signup' && <div><label htmlFor="auth-name">Name</label><input id="auth-name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} /></div>}
+              <div><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
+              <div>
+                <label htmlFor="auth-password">Password</label>
+                <input id="auth-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
+                {mode === 'signup' && <div className="muted small">At least 8 characters</div>}
+              </div>
+              {mode === 'signup' && <div>
+                <label className="row small" htmlFor="auth-leaderboard" style={{ alignItems: 'flex-start' }}>
+                  <input id="auth-leaderboard" type="checkbox" checked={showOnLeaderboard} onChange={(event) => setShowOnLeaderboard(event.target.checked)} style={{ width: 'auto', minHeight: 0, marginTop: 4 }} />
+                  <span>Show my verified badges on the public leaderboard</span>
+                </label>
+                <div className="muted small">You can change this any time in your profile.</div>
+              </div>}
+            </motion.div>
+          </AnimatePresence>
           {error && <div className="error" role="alert">{error}</div>}
           <button className="btn primary" type="submit" disabled={busy}>
             {busy ? <><span className="spinner" /> {mode === 'signup' ? 'Creating account...' : 'Signing in...'}</> : mode === 'signup' ? 'Create account' : 'Log in'}
           </button>
         </form>
-      </section>
+      </motion.section>
     </div>
   );
 }
