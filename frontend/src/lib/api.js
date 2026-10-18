@@ -39,6 +39,7 @@ export const api = {
   setBadgeVisibility: (sid, isPublic, token) => request('POST', `/submissions/${sid}/badge-visibility`, { public: isPublic }, null, token),
   mentorEndorse: (sid, body, key) => request('POST', `/submissions/${sid}/mentor`, body, key),
   listLive: () => request('GET', '/challenges?status=live'),
+  myChallenges: () => request('GET', '/challenges/mine'),
   getBadge: (badgeId) => request('GET', `/badges/${badgeId}`),
   signup: (body) => request('POST', '/auth/signup', body),
   login: (body) => request('POST', '/auth/login', body),

@@ -20,7 +20,7 @@ export default function Dashboard() {
   const { id } = useParams();
   const key = getOwnerKey(id);
   const { data: challenge, loading: challengeLoading, error: challengeError } = useAsync(
-    () => key ? api.getChallengeOwner(id, key) : Promise.reject(new Error('Missing owner key')),
+    () => api.getChallengeOwner(id, key),
     [id],
   );
   const [rows, setRows] = useState([]);
@@ -45,11 +45,10 @@ export default function Dashboard() {
   }, [id, key]);
 
   useEffect(() => {
-    if (!key) return undefined;
     reloadRows();
     const timer = setInterval(reloadRows, 8000);
     return () => clearInterval(timer);
-  }, [key, reloadRows]);
+  }, [reloadRows]);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   async function toggleShortlist(event, row) {
@@ -77,7 +76,6 @@ export default function Dashboard() {
     }
   }
 
-  if (!key) return <div className="card"><div className="error" role="alert">Open this page in the browser where you created the challenge.</div></div>;
   if (challengeLoading || !rowsLoaded) return <div className="card center"><span className="spinner" /></div>;
   if (challengeError) return <div className="card"><div className="error" role="alert">{challengeError}</div></div>;
   if (!challenge) return null;

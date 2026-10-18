@@ -59,8 +59,11 @@ export function requireRole(...roles) {
 const checkOwner = asyncHandler(async (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Please log in as a startup' });
   if (getAccountRole(req.user.role) !== 'startup') return res.status(403).json({ error: 'Startup account required' });
-  if (req.challenge.ownerUserId && String(req.challenge.ownerUserId) !== String(req.user._id)) {
-    return res.status(403).json({ error: 'You do not own this challenge' });
+  if (req.challenge.ownerUserId) {
+    if (String(req.challenge.ownerUserId) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'You do not own this challenge' });
+    }
+    return next();
   }
   const supplied = req.get('x-owner-key');
   if (!supplied) return res.status(403).json({ error: 'Owner key required' });
@@ -87,7 +90,8 @@ const checkCandidate = (req, res, next) => {
     && safeEqualHex(hashSecret(supplied), req.submission.candidateTokenHash);
   const validUser = req.user && req.submission.userId
     && String(req.user._id) === String(req.submission.userId);
-  if (!validToken && !validUser) return res.status(403).json({ error: 'Candidate session token required' });
+  const allowed = req.user && req.submission.userId ? validUser : validToken;
+  if (!allowed) return res.status(403).json({ error: 'Candidate session token required' });
   next();
 };
 

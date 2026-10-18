@@ -7,7 +7,7 @@ import submissions from './routes/submissions.js';
 import badges from './routes/badges.js';
 import auth from './routes/auth.js';
 import leaderboard from './routes/leaderboard.js';
-import { Challenge } from './models.js';
+import { Challenge, User } from './models.js';
 import { hashSecret } from './util.js';
 
 const app = express();
@@ -31,6 +31,8 @@ const port = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/proveit')
   .then(async () => {
+    // Accounts created before roles were introduced were candidate accounts; migrate them to the least-privileged role.
+    await User.updateMany({ role: { $exists: false } }, { $set: { role: 'candidate' } });
     const legacy = await Challenge.find({ ownerKey: { $type: 'string' } }).select('+ownerKey +ownerKeyHash');
     for (const challenge of legacy) {
       if (!challenge.ownerKeyHash) challenge.ownerKeyHash = hashSecret(challenge.ownerKey);

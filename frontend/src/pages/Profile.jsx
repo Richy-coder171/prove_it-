@@ -49,6 +49,7 @@ export default function Profile() {
   if (error && !data) return <div className="card"><div className="error" role="alert">{error}</div><button className="btn ghost" type="button" onClick={reload}>Try again</button></div>;
 
   const profile = draft || data?.user || user;
+  const isCandidate = profile.role === 'candidate';
   const attempts = data?.attempts || [];
   const stats = data?.stats || {};
 
@@ -85,21 +86,22 @@ export default function Profile() {
   return (
     <div className="stack">
       <div>
-        <h1>Your profile</h1>
-        <p className="muted">{profile.email} · Keep your professional context and verified work together.</p>
+        <div className="row"><span className="pill info">{isCandidate ? 'Candidate profile' : 'Startup profile'}</span></div>
+        <h1>{isCandidate ? 'Your profile' : 'Company profile'}</h1>
+        <p className="muted">{profile.email} · Keep your professional context and ProveIt account details up to date.</p>
       </div>
-      <div className="grid three">
+      {isCandidate && <div className="grid three">
         <div className="card"><div className="muted small">Attempts</div><h2>{stats.attempts ?? 0}</h2></div>
         <div className="card"><div className="muted small">Verified badges</div><h2>{stats.badges ?? 0}</h2></div>
         <div className="card"><div className="muted small">Best score</div><h2>{stats.bestScore ?? '—'}{stats.bestScore !== null && stats.bestScore !== undefined ? <span className="muted small"> / 100</span> : null}</h2></div>
         <div className="card"><div className="muted small">Average score</div><h2>{stats.averageScore ?? '—'}{stats.averageScore !== null && stats.averageScore !== undefined ? <span className="muted small"> / 100</span> : null}</h2></div>
-      </div>
+      </div>}
       <section className="card stack">
-        <div><h2>Profile details</h2><p className="muted small">Only supported profile fields are editable. Email and account credentials stay protected.</p></div>
+        <div><h2>{isCandidate ? 'Profile details' : 'Startup details'}</h2><p className="muted small">Only supported profile fields are editable. Email, account role, and credentials stay protected.</p></div>
         <form className="stack" onSubmit={save}>
           <div className="grid two">
             {fields.map(([field, label, type]) => <div key={field}>
-              <label htmlFor={`profile-${field}`}>{label}</label>
+              <label htmlFor={`profile-${field}`}>{!isCandidate && field === 'college' ? 'Company or startup' : label}</label>
               <input id={`profile-${field}`} type={type} value={profile[field] || ''} onChange={(event) => update(field, event.target.value)} />
             </div>)}
           </div>
@@ -107,30 +109,32 @@ export default function Profile() {
             <label htmlFor="profile-bio">Bio</label>
             <textarea id="profile-bio" value={profile.bio || ''} maxLength={500} onChange={(event) => update('bio', event.target.value)} />
           </div>
-          <label className="row small" htmlFor="profile-leaderboard" style={{ alignItems: 'flex-start' }}>
+          {isCandidate && <label className="row small" htmlFor="profile-leaderboard" style={{ alignItems: 'flex-start' }}>
             <input id="profile-leaderboard" type="checkbox" checked={Boolean(profile.showOnLeaderboard)} onChange={(event) => update('showOnLeaderboard', event.target.checked)} style={{ width: 'auto', minHeight: 0, marginTop: 4 }} />
             <span>Show my supported badge information on the public leaderboard.<br /><span className="muted">This can display your name, skill, score, level, and mentor name for qualifying badges.</span></span>
-          </label>
+          </label>}
           {saveError && <div className="error" role="alert">{saveError}</div>}
           {message && <div className="notice" role="status">{message}</div>}
           <div><button className="btn primary" type="submit" disabled={saving}>{saving ? <><span className="spinner" /> Saving…</> : 'Save profile'}</button></div>
         </form>
       </section>
-      <section className="card stack">
+      {isCandidate && <section className="card stack">
         <div><h2>Your challenge history</h2><p className="muted small">Scores and badges shown here come from your authenticated account.</p></div>
         {!attempts.length ? <p className="muted">No challenge attempts yet. {getAccountRole(user) === 'candidate' ? <><Link to="/feed">Explore open challenges</Link>.</> : <><Link to="/startup/dashboard">Return to your startup dashboard</Link>.</>}</p> : <div style={{ overflowX: 'auto' }}>
           <table className="table">
-            <thead><tr><th>Challenge</th><th>Skill</th><th>Status</th><th>Score</th><th>Credential</th></tr></thead>
+            <thead><tr><th>Challenge</th><th>Skill</th><th>Status</th><th>Score</th><th>Result</th><th>Credential</th></tr></thead>
             <tbody>{attempts.map((attempt) => <tr key={attempt.submissionId}>
               <td>{attempt.challengeTitle || 'Challenge'}</td>
               <td>{attempt.skill || '—'}</td>
               <td><span className={`pill ${attempt.status === 'graded' ? 'good' : 'info'}`}>{attempt.status}</span></td>
               <td>{attempt.total ?? '—'}{attempt.total !== null && attempt.total !== undefined ? ' / 100' : ''}</td>
+              <td>{attempt.status === 'graded' ? <Link to={`/result/${attempt.submissionId}`}>View result</Link> : <Link to={`/c/${attempt.challengeId}`}>Continue</Link>}</td>
               <td>{attempt.badgeId ? <Link to={`/badge/${attempt.badgeId}`}>{attempt.level || 'View badge'}</Link> : <span className="muted">None</span>}</td>
             </tr>)}</tbody>
           </table>
         </div>}
       </section>
+      }
     </div>
   );
 }
