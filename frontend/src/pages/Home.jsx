@@ -195,21 +195,10 @@ export default function Home() {
       <section className="home__hero">
         <div className="home__hero-copy">
           <h1>
-            <span>
-              Show the work{' '}
-              <span className="home__headline-art" aria-hidden="true">
-                <svg viewBox="0 0 72 38"><path d="M5 29 20 19l12 5 14-14 20 7" /><circle cx="46" cy="10" r="3" /></svg>
-              </span>
-            </span>
-            <span>
-              Defend{' '}
-              <span className="home__headline-pill" aria-hidden="true">
-                <img src="https://picsum.photos/seed/proveit-work/96/40" alt="" />
-              </span>{' '}
-              it.
-            </span>
+            <span>Show the work.</span>
+            <span>Defend it.</span>
           </h1>
-          <p>Anyone can get an AI to write an answer. ProveIt finds the people who can defend it.</p>
+          <p>Turn practical challenges and spoken follow-ups into evidence of skill that teams can verify.</p>
           <div className="home__actions">
             <Link className="home__button" to="/register">Create your account</Link>
             <Link className="home__text-link" to="/login">Log in</Link>
@@ -238,7 +227,7 @@ export default function Home() {
 
       <section className="home__process" id="how-it-works" aria-label="How ProveIt works">
         <div className="home__process-aside">
-          <span className="home__eyebrow">A clearer way to hire</span>
+          <span className="home__eyebrow">From real work to a verified result</span>
           <h2>From task<br />to badge.</h2>
           <p>See how a real piece of work becomes a result candidates can explain and teams can verify.</p>
         </div>
@@ -251,7 +240,6 @@ export default function Home() {
           ].map((item, index) => (
             <article className={`home__stage home__stage--${index + 1}`} key={item.id}>
               <div className="home__stage-heading">
-                <span className="home__stage-number">{String(index + 1).padStart(2, '0')}</span>
                 <h3>{item.title}</h3>
                 <span>{item.copy}</span>
               </div>
@@ -267,7 +255,6 @@ export default function Home() {
           <h2>One proof format.<br />Different goals.</h2>
           <div className="home__carousel-controls">
             <button type="button" aria-label="Previous audience" onClick={() => moveAudience(-1)}>&larr;</button>
-            <span aria-live="polite">{String(audienceIndex + 1).padStart(2, '0')} / {String(audiences.length).padStart(2, '0')}</span>
             <button type="button" aria-label="Next audience" onClick={() => moveAudience(1)}>&rarr;</button>
           </div>
         </div>

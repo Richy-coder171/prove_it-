@@ -46,4 +46,5 @@ export const api = {
   logout: () => request('POST', '/auth/logout'),
   me: () => request('GET', '/auth/me'),
   updateMe: (body) => request('PUT', '/auth/me', body),
+  adminOverview: (days = 30) => request('GET', `/admin/overview?days=${encodeURIComponent(days)}`),
 };

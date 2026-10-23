@@ -2,6 +2,10 @@ import { Challenge, Submission, User } from './models.js';
 import { asyncHandler, hashSecret, safeEqualHex } from './util.js';
 import { getAccountRole } from './roles.js';
 
+export function configuredAdminEmails() {
+  return (process.env.ADMIN_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
+}
+
 // Loads req.challenge from :id (404 if missing or bad id).
 export const loadChallenge = asyncHandler(async (req, res, next) => {
   const ch = await Challenge.findById(req.params.id).select('+ownerKeyHash +ownerKey').catch(() => null);
@@ -48,7 +52,9 @@ export const requireUser = [optionalUser, (req, res, next) => {
 
 export function requireRole(...roles) {
   return [...requireUser, (req, res, next) => {
-    if (!roles.includes(getAccountRole(req.user.role))) {
+    const role = getAccountRole(req.user.role);
+    const configuredAdmin = role !== 'admin' || configuredAdminEmails().includes(String(req.user.email || '').toLowerCase());
+    if (!configuredAdmin || !roles.includes(role)) {
       return res.status(403).json({ error: 'This account does not have permission for this area' });
     }
     next();
